@@ -1,8 +1,11 @@
-use core::panic;
+#[allow(unused)] // TODO Remove once done.
+
+mod model;
+
+use crate::model::*;
 use std::{
     collections::{HashMap, HashSet},
     f32::consts::PI,
-    fmt::Display,
 };
 
 use hexx::{Hex, HexLayout, HexOrientation, OffsetHexMode};
@@ -12,114 +15,7 @@ use notan::{
     math::{Mat3, Vec2},
     prelude::*,
 };
-use strum::{EnumIter, IntoEnumIterator};
-
-#[derive(Debug, Clone, Copy, EnumIter, PartialEq, Eq, Hash)]
-enum Terrain {
-    Desert,
-    Forest,
-    Water,
-    Swamp,
-    Mountain,
-}
-
-impl From<Terrain> for Color {
-    fn from(value: Terrain) -> Self {
-        match value {
-            Terrain::Desert => Color::new(0.82, 0.7, 0.31, 1.0),
-            Terrain::Forest => Color::new(0.2, 0.35, 0.24, 1.0),
-            Terrain::Water => Color::new(0.31, 0.5, 0.78, 1.0),
-            Terrain::Swamp => Color::new(0.23, 0.18, 0.29, 1.0),
-            Terrain::Mountain => Color::new(0.62, 0.62, 0.62, 1.0),
-        }
-    }
-}
-
-#[derive(Debug)]
-enum PlayerKind {
-    Alpha,
-    Beta,
-    Gamma,
-    Delta,
-    Epsilon,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Animal {
-    Bear,
-    Cougar,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum BuildingColor {
-    White,
-    Green,
-    Blue,
-    Black,
-}
-
-impl From<BuildingColor> for Color {
-    fn from(value: BuildingColor) -> Self {
-        match value {
-            BuildingColor::White => Color::WHITE,
-            BuildingColor::Green => Color::GREEN,
-            BuildingColor::Blue => Color::BLUE,
-            BuildingColor::Black => Color::BLACK,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum BuildingKind {
-    Shack,
-    Stone,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct Building {
-    kind: BuildingKind,
-    color: BuildingColor,
-}
-
-/// A single hexagon in the game world.
-#[derive(Debug)]
-struct Tile {
-    position: Hex,
-    terrain: Terrain,
-    animal: Option<Animal>,
-    building: Option<Building>,
-}
-
-#[derive(Debug)]
-struct World {
-    tiles: Vec<Tile>,
-}
-
-/// Choice for building the world. User can select a piece and decide to rotate it 180°.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct PieceChoice {
-    piece: Piece,
-    rotated: bool,
-}
-
-impl Display for PieceChoice {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.rotated {
-            write!(f, "{} (rotated)", self.piece.name())
-        } else {
-            write!(f, "{}", self.piece.name())
-        }
-    }
-}
-
-impl From<Piece> for PieceChoice {
-    fn from(piece: Piece) -> Self {
-        Self {
-            piece,
-            rotated: false,
-        }
-    }
-}
+use strum::IntoEnumIterator;
 
 #[derive(AppState)]
 struct State {
@@ -127,7 +23,6 @@ struct State {
     tile_radius: f32,
     // Offset to draw the tiles at. Used for dragging with mouse.
     offset: Vec2,
-    world: World,
     icons: HashMap<Terrain, Texture>,
     // TODO Split the state into substates. selected_pieces only exist during the setup for example.
     selected_pieces: [PieceChoice; 6],
@@ -138,14 +33,10 @@ struct State {
 impl State {
     fn new(gfx: &mut Graphics) -> Self {
         let icons = load_icons(gfx);
-        let world = World {
-            tiles: Piece::One.parse().0,
-        };
 
         Self {
             tile_radius: 64.0,
             icons,
-            world,
             selected_pieces: Piece::iter()
                 .map(Into::into)
                 .collect::<Vec<_>>()
@@ -165,96 +56,6 @@ impl State {
             .map(|choice| choice.piece)
             .collect();
         pieces.len() == 6
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash)]
-enum Piece {
-    One,
-    Two,
-    Three,
-    Four,
-    Five,
-    Six,
-}
-
-impl Piece {
-    fn definition(self) -> &'static str {
-        match self {
-            Piece::One => include_str!("../assets/piece-1.txt"),
-            Piece::Two => include_str!("../assets/piece-2.txt"),
-            Piece::Three => include_str!("../assets/piece-3.txt"),
-            Piece::Four => include_str!("../assets/piece-4.txt"),
-            Piece::Five => include_str!("../assets/piece-5.txt"),
-            Piece::Six => include_str!("../assets/piece-6.txt"),
-        }
-    }
-
-    fn name(self) -> &'static str {
-        match self {
-            Piece::One => "1",
-            Piece::Two => "2",
-            Piece::Three => "3",
-            Piece::Four => "4",
-            Piece::Five => "5",
-            Piece::Six => "6",
-        }
-    }
-
-    fn parse(self) -> ParsedPiece {
-        let mut tiles = Vec::new();
-        for (row_i, row) in self.definition().lines().enumerate() {
-            let chars: Vec<char> = row.chars().collect();
-            for col_i in (0..row.len()).step_by(2) {
-                let terrain = chars[col_i];
-                let animal = chars.get(col_i + 1).copied().unwrap_or(' '); // Be lenient with missing trailing spaces
-
-                let terrain = match terrain {
-                    'W' => Terrain::Water,
-                    'D' => Terrain::Desert,
-                    'M' => Terrain::Mountain,
-                    'F' => Terrain::Forest,
-                    'S' => Terrain::Swamp,
-                    unknown => panic!("Terrain {unknown} invalid, must be one of WDMFS"),
-                };
-
-                let animal = match animal {
-                    'b' => Some(Animal::Bear),
-                    'c' => Some(Animal::Cougar),
-                    _ => None,
-                };
-
-                tiles.push(Tile {
-                    position: Hex::from_offset_coordinates(
-                        [col_i as i32 / 2, row_i as i32],
-                        OffsetHexMode::OddColumns,
-                    ),
-                    terrain,
-                    animal,
-                    building: None, // buildings get added later
-                });
-            }
-        }
-        ParsedPiece(tiles)
-    }
-}
-
-/// One of the six 6x3 pieces the world is built out of.
-struct ParsedPiece(Vec<Tile>);
-
-impl ParsedPiece {
-    /// Rotate this piece 180°. The origin (0,0) is expected to be top-left
-    /// and will be top left after rotating.
-    fn rotate(&mut self) {
-        for tile in self.0.iter_mut() {
-            tile.position = -tile.position + Hex::new(5, 0);
-        }
-    }
-
-    fn translate(&mut self, t: Hex) {
-        for tile in self.0.iter_mut() {
-            tile.position += t;
-        }
     }
 }
 
