@@ -293,6 +293,8 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
     let mut draw = gfx.create_draw();
     draw.clear(Color::BLACK);
 
+    let stroke_width = state.tile_radius * 0.05;
+
     let (window_width, window_height) = app.window().size();
     let window_size: Vec2 = (window_width as f32, window_height as f32).into();
     let origin = window_size * 0.5 + state.offset;
@@ -321,7 +323,7 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
                 };
 
                 draw.polygon(6, state.tile_radius * 0.9)
-                    .stroke(4.0)
+                    .stroke(stroke_width)
                     .stroke_color(color);
             }
 
