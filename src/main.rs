@@ -5,7 +5,7 @@ use std::{
     fmt::Display,
 };
 
-use hexx::{Hex, HexLayout, HexOrientation};
+use hexx::{Hex, HexLayout, HexOrientation, OffsetHexMode};
 use notan::{
     draw::{CreateDraw, DrawConfig, DrawImages, DrawShapes, DrawTransform},
     egui::{self, EguiConfig, EguiPluginSugar},
@@ -227,7 +227,7 @@ impl Piece {
                 tiles.push(Tile {
                     position: Hex::from_offset_coordinates(
                         [col_i as i32 / 2, row_i as i32],
-                        hexx::OffsetHexMode::OddColumns,
+                        OffsetHexMode::OddColumns,
                     ),
                     terrain,
                     animal,
@@ -243,7 +243,19 @@ impl Piece {
 struct ParsedPiece(Vec<Tile>);
 
 impl ParsedPiece {
-    // TODO Rotate
+    /// Rotate this piece 180°. The origin (0,0) is expected to be top-left
+    /// and will be top left after rotating.
+    fn rotate(&mut self) {
+        for tile in self.0.iter_mut() {
+            tile.position = -tile.position + Hex::new(5, 0);
+        }
+    }
+
+    fn translate(&mut self, t: Hex) {
+        for tile in self.0.iter_mut() {
+            tile.position += t;
+        }
+    }
 }
 
 fn load_icons(gfx: &mut Graphics) -> HashMap<Terrain, Texture> {
@@ -284,8 +296,10 @@ fn main() -> Result<(), String> {
 }
 
 fn event(state: &mut State, event: Event) {
-    if let Event::MouseWheel { delta_y, .. } = event {
-        state.tile_radius = (state.tile_radius + delta_y).clamp(8.0, 1024.0);
+    if !state.is_egui_hovered {
+        if let Event::MouseWheel { delta_y, .. } = event {
+            state.tile_radius = (state.tile_radius + delta_y).clamp(8.0, 1024.0);
+        }
     }
 }
 
@@ -305,7 +319,29 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
         hex_size: Vec2::splat(state.tile_radius),
     };
 
-    for tile in &state.world.tiles {
+    // Build tiles from the users selection.
+    // TODO Recomputing this every frame is terrible.
+    let offsets = [
+        Hex::ZERO,
+        Hex::from_offset_coordinates([6, 0], OffsetHexMode::OddColumns),
+        Hex::from_offset_coordinates([0, 3], OffsetHexMode::OddColumns),
+        Hex::from_offset_coordinates([6, 3], OffsetHexMode::OddColumns),
+        Hex::from_offset_coordinates([0, 6], OffsetHexMode::OddColumns),
+        Hex::from_offset_coordinates([6, 6], OffsetHexMode::OddColumns),
+    ];
+    let tiles = offsets
+        .iter()
+        .zip(state.selected_pieces.iter())
+        .flat_map(|(&offset, piece)| {
+            let mut tiles = piece.piece.parse();
+            if piece.rotated {
+                tiles.rotate();
+            }
+            tiles.translate(offset);
+            tiles.0
+        });
+
+    for tile in tiles {
         let pos = layout.hex_to_world_pos(tile.position);
         draw.transform().push(Mat3::from_translation(pos));
 
