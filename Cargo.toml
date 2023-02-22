@@ -1,0 +1,11 @@
+[package]
+name = "cryptid-solver"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+notan = { version = "0.9.3", features = ["egui"] }
+strum = { version = "0.24.1", features = ["derive"] }
+hexx = { git = "https://github.com/ManevilleF/hexx.git", rev = "b72ddea" }
