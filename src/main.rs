@@ -1,17 +1,15 @@
-#[allow(unused)] // TODO Remove once done.
+#![allow(unused, dead_code)] // TODO Remove once done.
 
+mod buildingmap;
 mod model;
 
 use crate::model::*;
-use std::{
-    collections::{HashMap, HashSet},
-    f32::consts::PI,
-};
+use std::{collections::HashMap, f32::consts::PI};
 
-use hexx::{Hex, HexLayout, HexOrientation, OffsetHexMode};
+use hexx::{HexLayout, HexOrientation};
 use notan::{
     draw::{CreateDraw, DrawConfig, DrawImages, DrawShapes, DrawTransform},
-    egui::{self, EguiConfig, EguiPluginSugar},
+    egui::{EguiConfig, EguiPluginSugar},
     math::{Mat3, Vec2},
     prelude::*,
 };
@@ -24,10 +22,9 @@ struct State {
     // Offset to draw the tiles at. Used for dragging with mouse.
     offset: Vec2,
     icons: HashMap<Terrain, Texture>,
-    // TODO Split the state into substates. selected_pieces only exist during the setup for example.
-    selected_pieces: [PieceChoice; 6],
     is_egui_hovered: bool,
     mouse_last_frame: Vec2,
+    sub: SubState,
 }
 
 impl State {
@@ -37,25 +34,21 @@ impl State {
         Self {
             tile_radius: 64.0,
             icons,
-            selected_pieces: Piece::iter()
-                .map(Into::into)
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap(),
             is_egui_hovered: false,
             offset: Vec2::ZERO,
             mouse_last_frame: Vec2::ZERO,
+            sub: Default::default(),
         }
     }
+}
 
-    /// Returns true if every piece was selected exactly once.
-    fn are_selected_pieces_valid(&self) -> bool {
-        let pieces: HashSet<Piece> = self
-            .selected_pieces
-            .iter()
-            .map(|choice| choice.piece)
-            .collect();
-        pieces.len() == 6
+enum SubState {
+    BuildingMap(buildingmap::SubState),
+}
+
+impl Default for SubState {
+    fn default() -> Self {
+        Self::BuildingMap(buildingmap::SubState::default())
     }
 }
 
@@ -120,27 +113,9 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
         hex_size: Vec2::splat(state.tile_radius),
     };
 
-    // Build tiles from the users selection.
-    // TODO Recomputing this every frame is terrible.
-    let offsets = [
-        Hex::ZERO,
-        Hex::from_offset_coordinates([6, 0], OffsetHexMode::OddColumns),
-        Hex::from_offset_coordinates([0, 3], OffsetHexMode::OddColumns),
-        Hex::from_offset_coordinates([6, 3], OffsetHexMode::OddColumns),
-        Hex::from_offset_coordinates([0, 6], OffsetHexMode::OddColumns),
-        Hex::from_offset_coordinates([6, 6], OffsetHexMode::OddColumns),
-    ];
-    let tiles = offsets
-        .iter()
-        .zip(state.selected_pieces.iter())
-        .flat_map(|(&offset, piece)| {
-            let mut tiles = piece.piece.parse();
-            if piece.rotated {
-                tiles.rotate();
-            }
-            tiles.translate(offset);
-            tiles.0
-        });
+    let tiles = match &state.sub {
+        SubState::BuildingMap(sub) => sub.tiles(),
+    };
 
     for tile in tiles {
         let pos = layout.hex_to_world_pos(tile.position);
@@ -195,44 +170,17 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
     gfx.render(&draw);
 
     let output = plugins.egui(|ctx| {
-        egui::Window::new("Map Setup").show(ctx, |ui| {
-            egui::Grid::new("map-setup-grid").show(ui, |ui| {
-                for i in 0..6 {
-                    egui::ComboBox::new(format!("map-setup-choice-{i}"), "")
-                        .selected_text(format!("{}", state.selected_pieces[i]))
-                        .show_ui(ui, |ui| {
-                            for piece in Piece::iter() {
-                                for rotated in [false, true] {
-                                    let choice = PieceChoice { piece, rotated };
-                                    ui.selectable_value(
-                                        &mut state.selected_pieces[i],
-                                        choice,
-                                        format!("{choice}"),
-                                    );
-                                }
-                            }
-                        });
-
-                    if i % 2 > 0 {
-                        ui.end_row();
-                    }
-                }
-            });
-
-            if state.are_selected_pieces_valid() {
-                if ui.button("Ready").clicked() {
-                    println!("start game...");
-                }
-            } else {
-                ui.label("Select every piece once to continue");
-            }
-        });
+        match &mut state.sub {
+            SubState::BuildingMap(sub) => sub.gui(ctx),
+        }
 
         state.is_egui_hovered = ctx.wants_pointer_input();
     });
 
     gfx.render(&output);
 
+    // Perform the update now. We now know whether we should process mouse events,
+    // or if egui already handled them.
     update(app, state);
 }
 
