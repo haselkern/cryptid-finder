@@ -46,10 +46,19 @@ pub enum PlayerKind {
     Epsilon,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]
 pub enum Animal {
     Bear,
     Cougar,
+}
+
+impl Display for Animal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Animal::Bear => write!(f, "Bear"),
+            Animal::Cougar => write!(f, "Cougar"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -220,6 +229,8 @@ pub enum Clue {
     TwoTerrains(Terrain, Terrain),
     /// The creature is within one space of either animal.
     OneSpaceAnimal,
+    /// The creature is within two spaces of the animal territory.
+    TwoSpaceAnimal(Animal),
 }
 
 /// A map of tiles.

@@ -5,7 +5,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     buildingmap,
-    model::{Clue, Map, Terrain, Tile},
+    model::{Clue, Map, Terrain, Tile, Animal},
 };
 
 #[derive(Debug)]
@@ -57,6 +57,13 @@ impl SubState {
                             self.map.0[i].small = true;
                         }
                     }
+                    Clue::TwoSpaceAnimal(animal) => {
+                        let pos = self.map.0[i].position;
+                        let found = self.map.any(pos, 2, |t| t.animal == Some(animal));
+                        if !found {
+                            self.map.0[i].small = true;
+                        }
+                    },
                 }
             }
         }
@@ -93,6 +100,17 @@ impl SubState {
                     Clue::OneSpaceAnimal => {
                         ui.label("Within one space of either animal");
                     }
+                    Clue::TwoSpaceAnimal(animal) => {
+                        ui.label("Within two spaces of");
+                        egui::ComboBox::new(format!("animal-{i}"), "Territory")
+                            .selected_text(format!("{animal}"))
+                            .show_ui(ui, |ui| {
+                                for a in Animal::iter() {
+                                    ui.selectable_value(animal, a, format!("{a}"));
+                                }
+                            });
+                    },
+                    
                 }
 
                 if ui.button("Delete").clicked() {
@@ -108,15 +126,18 @@ impl SubState {
             egui::ComboBox::new("combobox-new-clue", "")
                 .selected_text("Add clue")
                 .show_ui(ui, |ui| {
-                    if ui.button("Within one space terrain").clicked() {
+                    if ui.button("Within one space of terrain").clicked() {
                         self.clues.push(Clue::WithinOneTerrain(Terrain::Desert));
                     }
-                    if ui.button("One of two").clicked() {
+                    if ui.button("One of two terrains").clicked() {
                         self.clues
                             .push(Clue::TwoTerrains(Terrain::Desert, Terrain::Forest));
                     }
-                    if ui.button("Within one space animal").clicked() {
+                    if ui.button("Within one space of either animal").clicked() {
                         self.clues.push(Clue::OneSpaceAnimal);
+                    }
+                    if ui.button("Within two spaces of animal").clicked() {
+                        self.clues.push(Clue::TwoSpaceAnimal(Animal::Bear));
                     }
                 });
         });
