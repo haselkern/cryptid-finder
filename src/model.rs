@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use hexx::{Hex, OffsetHexMode};
+use hexx::{Hex, HexMap, OffsetHexMode};
 use notan::prelude::Color;
 use strum::EnumIter;
 
@@ -218,6 +218,8 @@ pub enum Clue {
     WithinOneTerrain(Terrain),
     /// The creature is on one of these types of terrain.
     TwoTerrains(Terrain, Terrain),
+    /// The creature is within one space of either animal.
+    OneSpaceAnimal,
 }
 
 /// A map of tiles.
@@ -227,5 +229,27 @@ pub struct Map(pub Vec<Tile>);
 impl Map {
     pub fn get_mut(&mut self, at: Hex) -> Option<&mut Tile> {
         self.0.iter_mut().find(|tile| tile.position == at)
+    }
+
+    pub fn get(&self, at: Hex) -> Option<&Tile> {
+        self.0.iter().find(|tile| tile.position == at)
+    }
+
+    /// Check any fields for the condition. Position is always checked. Add fields with "distance".
+    /// Distance 0 is only position. Distance 1 is position with direct neighbors, etc.
+    /// Returns true if the condition is true for any field.
+    pub fn any<F>(&self, position: Hex, distance: u32, condition: F) -> bool
+    where
+        F: Fn(&Tile) -> bool,
+    {
+        let to_check = HexMap::new(distance).with_center(position);
+        for check in to_check.all_coords() {
+            if let Some(tile) = self.get(check) {
+                if condition(tile) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }

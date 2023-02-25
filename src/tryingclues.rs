@@ -35,31 +35,26 @@ impl SubState {
         }
 
         for &clue in &self.clues {
-            match clue {
-                Clue::WithinOneTerrain(terrain) => {
-                    for i in 0..self.map.0.len() {
+            for i in 0..self.map.0.len() {
+                match clue {
+                    Clue::WithinOneTerrain(terrain) => {
                         let pos = self.map.0[i].position;
-                        // Check neighbors and own position
-                        let mut found_terrain = false;
-                        for check in iter::once(pos).chain(pos.all_neighbors()) {
-                            let Some(tile) =  self.map.get_mut(check) else {
-                                continue
-                            };
-                            if tile.terrain == terrain {
-                                found_terrain = true;
-                                break;
-                            }
-                        }
-                        if !found_terrain {
+                        let found = self.map.any(pos, 1, |t| t.terrain == terrain);
+                        if !found {
                             self.map.0[i].small = true;
                         }
                     }
-                }
-                Clue::TwoTerrains(a, b) => {
-                    for i in 0..self.map.0.len() {
+                    Clue::TwoTerrains(a, b) => {
                         let tile = &mut self.map.0[i];
                         if tile.terrain != a && tile.terrain != b {
                             tile.small = true;
+                        }
+                    }
+                    Clue::OneSpaceAnimal => {
+                        let pos = self.map.0[i].position;
+                        let found = self.map.any(pos, 1, |t| t.animal.is_some());
+                        if !found {
+                            self.map.0[i].small = true;
                         }
                     }
                 }
@@ -95,6 +90,9 @@ impl SubState {
                         ui.label("or on");
                         terrain_switcher(format!("terrain-{i}-b"), ui, b);
                     }
+                    Clue::OneSpaceAnimal => {
+                        ui.label("Within one space of either animal");
+                    }
                 }
 
                 if ui.button("Delete").clicked() {
@@ -110,12 +108,15 @@ impl SubState {
             egui::ComboBox::new("combobox-new-clue", "")
                 .selected_text("Add clue")
                 .show_ui(ui, |ui| {
-                    if ui.button("With one space").clicked() {
+                    if ui.button("Within one space terrain").clicked() {
                         self.clues.push(Clue::WithinOneTerrain(Terrain::Desert));
                     }
                     if ui.button("One of two").clicked() {
                         self.clues
                             .push(Clue::TwoTerrains(Terrain::Desert, Terrain::Forest));
+                    }
+                    if ui.button("Within one space animal").clicked() {
+                        self.clues.push(Clue::OneSpaceAnimal);
                     }
                 });
         });
