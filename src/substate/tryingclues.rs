@@ -173,8 +173,8 @@ impl TryingClues {
                         self.map.any(pos, 1, |t| t.terrain == terrain)
                     }
                     Clue::TwoTerrains(a, b) => {
-                        let tile = &mut self.map.0[i];
-                        tile.terrain != a && tile.terrain != b
+                        let tile = &self.map.0[i];
+                        tile.terrain == a || tile.terrain == b
                     }
                     Clue::OneSpaceAnimal => self.map.any(pos, 1, |t| t.animal.is_some()),
                     Clue::TwoSpaceAnimal(animal) => {
