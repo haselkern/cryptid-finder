@@ -5,7 +5,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     buildingmap,
-    model::{Clue, Map, Terrain, Tile, Animal},
+    model::{Animal, Clue, Map, Terrain, Tile},
 };
 
 #[derive(Debug)]
@@ -63,7 +63,7 @@ impl SubState {
                         if !found {
                             self.map.0[i].small = true;
                         }
-                    },
+                    }
                 }
             }
         }
@@ -79,12 +79,14 @@ impl SubState {
         // Index of clue to delete
         let mut delete_index = None;
 
+        let remaining_tiles = self.map.0.iter().filter(|t| !t.small).count();
+
         egui::Window::new("Clues").show(ctx, |ui| {
+            ui.label(format!("{remaining_tiles} tiles remain."));
+
             // Edit existing clues
             for (i, clue) in self.clues.iter_mut().enumerate() {
-                if i > 0 {
-                    ui.separator();
-                }
+                ui.separator();
 
                 match clue {
                     Clue::WithinOneTerrain(terrain) => {
@@ -115,8 +117,7 @@ impl SubState {
                                     }
                                 });
                         });
-                    },
-                    
+                    }
                 }
 
                 if ui.button("Delete").clicked() {
@@ -124,9 +125,7 @@ impl SubState {
                 }
             }
 
-            if !self.clues.is_empty() {
-                ui.separator();
-            }
+            ui.separator();
 
             // Add a new clue
             egui::ComboBox::new("combobox-new-clue", "")
