@@ -1,21 +1,23 @@
-use std::{collections::VecDeque, hash::Hash, iter};
+use std::hash::Hash;
 
 use notan::egui::{self, Context};
 use strum::IntoEnumIterator;
 
 use crate::{
-    buildingmap,
     model::{Animal, Clue, Map, Terrain, Tile},
+    substate::placingstructures,
 };
 
+use super::Common;
+
 #[derive(Debug)]
-pub struct SubState {
+pub struct TryingClues {
     map: Map,
     clues: Vec<Clue>,
 }
 
-impl From<&buildingmap::SubState> for SubState {
-    fn from(value: &buildingmap::SubState) -> Self {
+impl From<&placingstructures::PlacingStructures> for TryingClues {
+    fn from(value: &placingstructures::PlacingStructures) -> Self {
         let mut s = Self {
             map: Map(value.tiles().to_vec()),
             clues: Vec::new(),
@@ -25,55 +27,15 @@ impl From<&buildingmap::SubState> for SubState {
     }
 }
 
-impl SubState {
-    /// Go through all tiles and see if any clue applies to them.
-    /// If no clue applies to them, they are drawn as small.
-    pub fn scan_clues(&mut self) {
-        // Set tile to be big. Should any clue fail, then it will be small.
-        for tile in &mut self.map.0 {
-            tile.small = false;
-        }
-
-        for &clue in &self.clues {
-            for i in 0..self.map.0.len() {
-                match clue {
-                    Clue::WithinOneTerrain(terrain) => {
-                        let pos = self.map.0[i].position;
-                        let found = self.map.any(pos, 1, |t| t.terrain == terrain);
-                        if !found {
-                            self.map.0[i].small = true;
-                        }
-                    }
-                    Clue::TwoTerrains(a, b) => {
-                        let tile = &mut self.map.0[i];
-                        if tile.terrain != a && tile.terrain != b {
-                            tile.small = true;
-                        }
-                    }
-                    Clue::OneSpaceAnimal => {
-                        let pos = self.map.0[i].position;
-                        let found = self.map.any(pos, 1, |t| t.animal.is_some());
-                        if !found {
-                            self.map.0[i].small = true;
-                        }
-                    }
-                    Clue::TwoSpaceAnimal(animal) => {
-                        let pos = self.map.0[i].position;
-                        let found = self.map.any(pos, 2, |t| t.animal == Some(animal));
-                        if !found {
-                            self.map.0[i].small = true;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn tiles(&self) -> &[Tile] {
+impl Common for TryingClues {
+    fn tiles(&self) -> &[Tile] {
         &self.map.0
     }
+    fn tiles_mut(&mut self) -> &mut [Tile] {
+        &mut self.map.0
+    }
 
-    pub fn gui(&mut self, ctx: &Context) -> bool {
+    fn gui(&mut self, ctx: &Context) -> bool {
         let clues_before = self.clues.clone();
 
         // Index of clue to delete
@@ -156,6 +118,51 @@ impl SubState {
         }
 
         false
+    }
+}
+
+impl TryingClues {
+    /// Go through all tiles and see if any clue applies to them.
+    /// If no clue applies to them, they are drawn as small.
+    fn scan_clues(&mut self) {
+        // Set tile to be big. Should any clue fail, then it will be small.
+        for tile in &mut self.map.0 {
+            tile.small = false;
+        }
+
+        for &clue in &self.clues {
+            for i in 0..self.map.0.len() {
+                match clue {
+                    Clue::WithinOneTerrain(terrain) => {
+                        let pos = self.map.0[i].position;
+                        let found = self.map.any(pos, 1, |t| t.terrain == terrain);
+                        if !found {
+                            self.map.0[i].small = true;
+                        }
+                    }
+                    Clue::TwoTerrains(a, b) => {
+                        let tile = &mut self.map.0[i];
+                        if tile.terrain != a && tile.terrain != b {
+                            tile.small = true;
+                        }
+                    }
+                    Clue::OneSpaceAnimal => {
+                        let pos = self.map.0[i].position;
+                        let found = self.map.any(pos, 1, |t| t.animal.is_some());
+                        if !found {
+                            self.map.0[i].small = true;
+                        }
+                    }
+                    Clue::TwoSpaceAnimal(animal) => {
+                        let pos = self.map.0[i].position;
+                        let found = self.map.any(pos, 2, |t| t.animal == Some(animal));
+                        if !found {
+                            self.map.0[i].small = true;
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

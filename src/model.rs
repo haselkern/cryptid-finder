@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt;
 
 use hexx::{Hex, HexMap, OffsetHexMode};
 use notan::prelude::Color;
@@ -25,8 +25,8 @@ impl From<Terrain> for Color {
     }
 }
 
-impl Display for Terrain {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Terrain {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Terrain::Desert => write!(f, "Desert"),
             Terrain::Forest => write!(f, "Forest"),
@@ -52,8 +52,8 @@ pub enum Animal {
     Cougar,
 }
 
-impl Display for Animal {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Animal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Animal::Bear => write!(f, "Bear"),
             Animal::Cougar => write!(f, "Cougar"),
@@ -61,7 +61,7 @@ impl Display for Animal {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]
 pub enum StructureColor {
     White,
     Green,
@@ -69,13 +69,24 @@ pub enum StructureColor {
     Black,
 }
 
+impl fmt::Display for StructureColor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StructureColor::White => write!(f, "white"),
+            StructureColor::Green => write!(f, "green"),
+            StructureColor::Blue => write!(f, "blue"),
+            StructureColor::Black => write!(f, "black"),
+        }
+    }
+}
+
 impl From<StructureColor> for Color {
     fn from(value: StructureColor) -> Self {
         match value {
-            StructureColor::White => Color::WHITE,
-            StructureColor::Green => Color::GREEN,
-            StructureColor::Blue => Color::BLUE,
-            StructureColor::Black => Color::BLACK,
+            StructureColor::White => Color::new(0.9, 0.9, 0.9, 1.0),
+            StructureColor::Green => Color::new(0.2, 0.8, 0.2, 1.0),
+            StructureColor::Blue => Color::new(0.2, 0.2, 0.8, 1.0),
+            StructureColor::Black => Color::new(0.1, 0.1, 0.1, 1.0),
         }
     }
 }
@@ -110,8 +121,8 @@ pub struct PieceChoice {
     pub rotated: bool,
 }
 
-impl Display for PieceChoice {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for PieceChoice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.rotated {
             write!(f, "{} (rotated)", self.piece.name())
         } else {

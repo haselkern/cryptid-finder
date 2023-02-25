@@ -1,13 +1,10 @@
-#![allow(unused, dead_code)] // TODO Remove once done.
-
-mod buildingmap;
 mod model;
-mod tryingclues;
+mod substate;
 
 use crate::model::*;
 use std::{collections::HashMap, f32::consts::PI};
 
-use hexx::{HexLayout, HexOrientation};
+use hexx::{Hex, HexLayout, HexOrientation};
 use notan::{
     draw::{CreateDraw, DrawConfig, DrawImages, DrawShapes, DrawTransform},
     egui::{EguiConfig, EguiPluginSugar},
@@ -15,6 +12,7 @@ use notan::{
     prelude::*,
 };
 use strum::IntoEnumIterator;
+use substate::{Common, SubState};
 
 #[derive(AppState)]
 struct State {
@@ -24,7 +22,7 @@ struct State {
     offset: Vec2,
     icons: HashMap<Terrain, Texture>,
     is_egui_hovered: bool,
-    mouse_last_frame: Vec2,
+    dragging: Dragging,
     sub: SubState,
 }
 
@@ -37,22 +35,26 @@ impl State {
             icons,
             is_egui_hovered: false,
             offset: Vec2::ZERO,
-            mouse_last_frame: Vec2::ZERO,
+            dragging: Dragging::None,
             sub: Default::default(),
         }
     }
-}
 
-#[derive(Debug)]
-enum SubState {
-    BuildingMap(buildingmap::SubState),
-    TryingClues(tryingclues::SubState),
-}
-
-impl Default for SubState {
-    fn default() -> Self {
-        Self::BuildingMap(buildingmap::SubState::default())
+    /// True if the structures are supposed to be draggable in this substate.
+    fn are_structures_draggable(&self) -> bool {
+        matches!(self.sub, SubState::PlacingStructures(_))
     }
+}
+
+/// Possible dragging modes.
+#[derive(Debug, Clone, Copy)]
+enum Dragging {
+    /// No dragging active.
+    None,
+    /// The offset i.e. the screen if being dragged.
+    Offset { mouse_last_frame: Vec2 },
+    /// A structure (currently on the tile at the Hex) is being dragged to another tile.
+    Structure(Hex),
 }
 
 fn load_icons(gfx: &mut Graphics) -> HashMap<Terrain, Texture> {
@@ -116,12 +118,7 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
         hex_size: Vec2::splat(state.tile_radius),
     };
 
-    let tiles = match &state.sub {
-        SubState::BuildingMap(sub) => sub.tiles(),
-        SubState::TryingClues(sub) => sub.tiles(),
-    };
-
-    for tile in tiles {
+    for tile in state.sub.tiles() {
         let pos = layout.hex_to_world_pos(tile.position);
 
         let scale = if tile.small {
@@ -144,7 +141,7 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
             if let Some(animal) = tile.animal {
                 let color = match animal {
                     Animal::Bear => Color::BLACK,
-                    Animal::Cougar => Color::RED,
+                    Animal::Cougar => Color::new(0.78, 0.1, 0.1, 1.0),
                 };
 
                 draw.polygon(6, state.tile_radius * 0.9)
@@ -154,18 +151,6 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
             }
 
             draw.transform().pop();
-        }
-
-        if let Some(building) = tile.structure {
-            let color = building.color.into();
-            let sides = match building.kind {
-                StructureKind::Shack => 3,
-                StructureKind::Stone => 8,
-            };
-
-            draw.polygon(sides, state.tile_radius * 0.7)
-                .color(color)
-                .rotate(PI);
         }
 
         // Draw icon for terrain
@@ -179,6 +164,22 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
             draw.transform().pop();
         }
 
+        if let Some(building) = tile.structure {
+            let color = building.color.into();
+            let sides = match building.kind {
+                StructureKind::Shack => 3,
+                StructureKind::Stone => 8,
+            };
+
+            draw.polygon(sides, state.tile_radius * 0.5)
+                .color(color)
+                .rotate(PI);
+            draw.polygon(sides, state.tile_radius * 0.5)
+                .stroke(stroke_width)
+                .stroke_color(Color::BLACK)
+                .rotate(PI);
+        }
+
         draw.transform().pop();
     }
     gfx.render(&draw);
@@ -186,10 +187,11 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
     let mut switch_state = false;
 
     let output = plugins.egui(|ctx| {
-        switch_state = match &mut state.sub {
-            SubState::BuildingMap(sub) => sub.gui(ctx),
-            SubState::TryingClues(sub) => sub.gui(ctx),
-        };
+        switch_state = state.sub.gui(ctx);
+
+        if switch_state {
+            ctx.memory().reset_areas();
+        }
 
         state.is_egui_hovered = ctx.wants_pointer_input();
     });
@@ -198,30 +200,76 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
 
     if switch_state {
         match &state.sub {
-            SubState::BuildingMap(sub) => state.sub = SubState::TryingClues(sub.into()),
-            other => println!(
-                "{other:?} wanted to switch states, but I don't know how :( This is a bug."
-            ),
+            SubState::BuildingMap(sub) => state.sub = SubState::PlacingStructures(sub.into()),
+            SubState::PlacingStructures(sub) => state.sub = SubState::TryingClues(sub.into()),
+            other => {
+                panic!("{other:?} wanted to switch states, but I don't know how :( This is a bug.")
+            }
         };
     }
 
     // Perform the update now. We now know whether we should process mouse events,
     // or if egui already handled them.
-    update(app, state);
+    update(app, state, &layout);
 }
 
-fn update(app: &mut App, state: &mut State) {
+fn update(app: &mut App, state: &mut State, layout: &HexLayout) {
     // Don't update if the mouse is over some egui thing
     if state.is_egui_hovered {
         return;
     }
 
-    // Drag the drawing offset
     if app.mouse.left_is_down() {
-        let delta = Vec2::from(app.mouse.position()) - state.mouse_last_frame;
-        state.offset += delta;
-    }
+        let mouse = Vec2::from(app.mouse.position());
 
-    // Remember current mouse position for next frame
-    state.mouse_last_frame = app.mouse.position().into();
+        match state.dragging {
+            Dragging::None => {
+                // Start dragging a structure (if that is allowed) or the screen.
+                let mouse_hex = layout.world_pos_to_hex(mouse);
+                let over_tile = state.sub.tiles().iter().find(|t| t.position == mouse_hex);
+                let has_structure = over_tile.map(|t| t.structure.is_some()).unwrap_or(false);
+
+                if has_structure && state.are_structures_draggable() {
+                    state.dragging = Dragging::Structure(mouse_hex);
+                } else {
+                    state.dragging = Dragging::Offset {
+                        mouse_last_frame: app.mouse.position().into(),
+                    };
+                }
+            }
+            Dragging::Offset { mouse_last_frame } => {
+                let delta = mouse - mouse_last_frame;
+                state.offset += delta;
+                state.dragging = Dragging::Offset {
+                    mouse_last_frame: mouse,
+                };
+            }
+            Dragging::Structure(at) => {
+                // Check if the hex under the mouse has space for the structure.
+                // Move the structure (currently "at" another hex) to there.
+                let mouse_hex = layout.world_pos_to_hex(mouse);
+                let tiles = state.sub.tiles_mut();
+
+                let Some(to) = tiles.iter().position(|t| t.position == mouse_hex) else {
+                    // No tile under mouse.
+                    return;
+                };
+
+                if tiles[to].structure.is_some() {
+                    // Tile under mouse already has a structure.
+                    return;
+                }
+
+                let from = tiles
+                    .iter()
+                    .position(|t| t.position == at)
+                    .expect("The map changed drastically. This should not happen.");
+
+                tiles[to].structure = tiles[from].structure.take();
+                state.dragging = Dragging::Structure(mouse_hex);
+            }
+        }
+    } else {
+        state.dragging = Dragging::None;
+    }
 }

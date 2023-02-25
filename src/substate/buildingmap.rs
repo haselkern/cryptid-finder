@@ -6,14 +6,16 @@ use strum::IntoEnumIterator;
 
 use crate::model::{Piece, PieceChoice, Tile};
 
+use super::Common;
+
 /// A sub state for functionality for building a map.
 #[derive(Debug)]
-pub struct SubState {
+pub struct BuildingMap {
     selected_pieces: [PieceChoice; 6],
     tiles: Vec<Tile>,
 }
 
-impl Default for SubState {
+impl Default for BuildingMap {
     fn default() -> Self {
         let mut s = Self {
             selected_pieces: Piece::iter()
@@ -29,37 +31,15 @@ impl Default for SubState {
     }
 }
 
-impl SubState {
-    pub fn tiles(&self) -> &[Tile] {
+impl Common for BuildingMap {
+    fn tiles(&self) -> &[Tile] {
         &self.tiles
     }
-
-    /// Update tiles after user changed something
-    fn rebuild_tiles(&mut self) {
-        let offsets = [
-            Hex::ZERO,
-            Hex::from_offset_coordinates([6, 0], OffsetHexMode::OddColumns),
-            Hex::from_offset_coordinates([0, 3], OffsetHexMode::OddColumns),
-            Hex::from_offset_coordinates([6, 3], OffsetHexMode::OddColumns),
-            Hex::from_offset_coordinates([0, 6], OffsetHexMode::OddColumns),
-            Hex::from_offset_coordinates([6, 6], OffsetHexMode::OddColumns),
-        ];
-        self.tiles = offsets
-            .iter()
-            .zip(self.selected_pieces.iter())
-            .flat_map(|(&offset, piece)| {
-                let mut tiles = piece.piece.parse();
-                if piece.rotated {
-                    tiles.rotate();
-                }
-                tiles.translate(offset);
-                tiles.0
-            })
-            .collect();
+    fn tiles_mut(&mut self) -> &mut [Tile] {
+        &mut self.tiles
     }
 
-    /// Draw GUI. Returns true if we should switch to the next state.
-    pub fn gui(&mut self, ctx: &egui::Context) -> bool {
+    fn gui(&mut self, ctx: &egui::Context) -> bool {
         let selected_pieces_before = self.selected_pieces;
         let mut next_state = false;
 
@@ -101,6 +81,32 @@ impl SubState {
         }
 
         next_state
+    }
+}
+
+impl BuildingMap {
+    /// Update tiles after user changed something
+    fn rebuild_tiles(&mut self) {
+        let offsets = [
+            Hex::ZERO,
+            Hex::from_offset_coordinates([6, 0], OffsetHexMode::OddColumns),
+            Hex::from_offset_coordinates([0, 3], OffsetHexMode::OddColumns),
+            Hex::from_offset_coordinates([6, 3], OffsetHexMode::OddColumns),
+            Hex::from_offset_coordinates([0, 6], OffsetHexMode::OddColumns),
+            Hex::from_offset_coordinates([6, 6], OffsetHexMode::OddColumns),
+        ];
+        self.tiles = offsets
+            .iter()
+            .zip(self.selected_pieces.iter())
+            .flat_map(|(&offset, piece)| {
+                let mut tiles = piece.piece.parse();
+                if piece.rotated {
+                    tiles.rotate();
+                }
+                tiles.translate(offset);
+                tiles.0
+            })
+            .collect();
     }
 }
 
