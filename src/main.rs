@@ -156,11 +156,11 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
             draw.transform().pop();
         }
 
-        if let Some(building) = tile.building {
+        if let Some(building) = tile.structure {
             let color = building.color.into();
             let sides = match building.kind {
-                BuildingKind::Shack => 3,
-                BuildingKind::Stone => 8,
+                StructureKind::Shack => 3,
+                StructureKind::Stone => 8,
             };
 
             draw.polygon(sides, state.tile_radius * 0.7)

@@ -62,34 +62,34 @@ impl Display for Animal {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum BuildingColor {
+pub enum StructureColor {
     White,
     Green,
     Blue,
     Black,
 }
 
-impl From<BuildingColor> for Color {
-    fn from(value: BuildingColor) -> Self {
+impl From<StructureColor> for Color {
+    fn from(value: StructureColor) -> Self {
         match value {
-            BuildingColor::White => Color::WHITE,
-            BuildingColor::Green => Color::GREEN,
-            BuildingColor::Blue => Color::BLUE,
-            BuildingColor::Black => Color::BLACK,
+            StructureColor::White => Color::WHITE,
+            StructureColor::Green => Color::GREEN,
+            StructureColor::Blue => Color::BLUE,
+            StructureColor::Black => Color::BLACK,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum BuildingKind {
+pub enum StructureKind {
     Shack,
     Stone,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Building {
-    pub kind: BuildingKind,
-    pub color: BuildingColor,
+pub struct Structure {
+    pub kind: StructureKind,
+    pub color: StructureColor,
 }
 
 /// A single hexagon in the game world.
@@ -98,7 +98,7 @@ pub struct Tile {
     pub position: Hex,
     pub terrain: Terrain,
     pub animal: Option<Animal>,
-    pub building: Option<Building>,
+    pub structure: Option<Structure>,
     /// Small is true if this tile should be drawn a bit smaller than usual.
     pub small: bool,
 }
@@ -192,7 +192,7 @@ impl Piece {
                     ),
                     terrain,
                     animal,
-                    building: None, // buildings get added later
+                    structure: None, // Structures get added later
                     small: false,
                 });
             }
