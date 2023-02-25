@@ -7,6 +7,7 @@ use strum::IntoEnumIterator;
 use crate::model::{Piece, PieceChoice, Tile};
 
 /// A sub state for functionality for building a map.
+#[derive(Debug)]
 pub struct SubState {
     selected_pieces: [PieceChoice; 6],
     tiles: Vec<Tile>,
@@ -35,7 +36,6 @@ impl SubState {
 
     /// Update tiles after user changed something
     fn rebuild_tiles(&mut self) {
-        println!("rebuild tiles");
         let offsets = [
             Hex::ZERO,
             Hex::from_offset_coordinates([6, 0], OffsetHexMode::OddColumns),
@@ -58,8 +58,10 @@ impl SubState {
             .collect();
     }
 
-    pub fn gui(&mut self, ctx: &egui::Context) {
+    /// Draw GUI. Returns true if we should switch to the next state.
+    pub fn gui(&mut self, ctx: &egui::Context) -> bool {
         let selected_pieces_before = self.selected_pieces;
+        let mut next_state = false;
 
         egui::Window::new("Map Setup").show(ctx, |ui| {
             egui::Grid::new("map-setup-grid").show(ui, |ui| {
@@ -87,7 +89,7 @@ impl SubState {
 
             if are_selected_pieces_valid(&self.selected_pieces) {
                 if ui.button("Ready").clicked() {
-                    println!("start game...");
+                    next_state = true;
                 }
             } else {
                 ui.label("Select every piece once to continue");
@@ -97,6 +99,8 @@ impl SubState {
         if selected_pieces_before != self.selected_pieces {
             self.rebuild_tiles();
         }
+
+        next_state
     }
 }
 

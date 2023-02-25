@@ -2,6 +2,7 @@
 
 mod buildingmap;
 mod model;
+mod tryingclues;
 
 use crate::model::*;
 use std::{collections::HashMap, f32::consts::PI};
@@ -42,8 +43,10 @@ impl State {
     }
 }
 
+#[derive(Debug)]
 enum SubState {
     BuildingMap(buildingmap::SubState),
+    TryingClues(tryingclues::SubState),
 }
 
 impl Default for SubState {
@@ -115,18 +118,28 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
 
     let tiles = match &state.sub {
         SubState::BuildingMap(sub) => sub.tiles(),
+        SubState::TryingClues(sub) => sub.tiles(),
     };
 
     for tile in tiles {
         let pos = layout.hex_to_world_pos(tile.position);
-        draw.transform().push(Mat3::from_translation(pos));
+
+        let scale = if tile.small {
+            Mat3::from_scale(Vec2::splat(0.7))
+        } else {
+            Mat3::IDENTITY
+        };
+        let alpha = if tile.small { 0.6 } else { 1.0 };
+
+        draw.transform().push(Mat3::from_translation(pos) * scale);
 
         // Draw flat topped hex
         {
             draw.transform().push(Mat3::from_rotation_z(PI / 6.0));
 
             draw.polygon(6, state.tile_radius)
-                .color(tile.terrain.into());
+                .color(tile.terrain.into())
+                .alpha(alpha);
 
             if let Some(animal) = tile.animal {
                 let color = match animal {
@@ -136,7 +149,8 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
 
                 draw.polygon(6, state.tile_radius * 0.9)
                     .stroke(stroke_width)
-                    .stroke_color(color);
+                    .stroke_color(color)
+                    .alpha(alpha);
             }
 
             draw.transform().pop();
@@ -155,7 +169,7 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
         }
 
         // Draw icon for terrain
-        {
+        if !tile.small {
             let tex = state.icons.get(&tile.terrain).unwrap();
             let scale = state.tile_radius * 0.015;
             let size = Vec2::from(tex.size());
@@ -169,15 +183,27 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
     }
     gfx.render(&draw);
 
+    let mut switch_state = false;
+
     let output = plugins.egui(|ctx| {
-        match &mut state.sub {
+        switch_state = match &mut state.sub {
             SubState::BuildingMap(sub) => sub.gui(ctx),
-        }
+            SubState::TryingClues(sub) => sub.gui(ctx),
+        };
 
         state.is_egui_hovered = ctx.wants_pointer_input();
     });
 
     gfx.render(&output);
+
+    if switch_state {
+        match &state.sub {
+            SubState::BuildingMap(sub) => state.sub = SubState::TryingClues(sub.into()),
+            other => println!(
+                "{other:?} wanted to switch states, but I don't know how :( This is a bug."
+            ),
+        };
+    }
 
     // Perform the update now. We now know whether we should process mouse events,
     // or if egui already handled them.
