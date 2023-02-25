@@ -4,7 +4,7 @@ use notan::egui::{self, Context};
 use strum::IntoEnumIterator;
 
 use crate::{
-    model::{Animal, Clue, Map, Terrain, Tile},
+    model::{Animal, Clue, Map, StructureColor, StructureKind, Terrain, Tile},
     substate::placingstructures,
 };
 
@@ -80,6 +80,30 @@ impl Common for TryingClues {
                                 });
                         });
                     }
+                    Clue::TwoSpaceStructureKind(kind) => {
+                        ui.horizontal(|ui| {
+                            ui.label("Within two spaces of");
+                            egui::ComboBox::new(format!("structurekind-{i}"), "")
+                                .selected_text(format!("{kind}"))
+                                .show_ui(ui, |ui| {
+                                    for k in StructureKind::iter() {
+                                        ui.selectable_value(kind, k, format!("{k}"));
+                                    }
+                                });
+                        });
+                    }
+                    Clue::ThreeSpaceStructureColor(color) => {
+                        ui.horizontal(|ui| {
+                            ui.label("Within three spaces of");
+                            egui::ComboBox::new(format!("structurecolor-{i}"), "structure")
+                                .selected_text(format!("{color}"))
+                                .show_ui(ui, |ui| {
+                                    for c in StructureColor::iter() {
+                                        ui.selectable_value(color, c, format!("{c}"));
+                                    }
+                                });
+                        });
+                    }
                 }
 
                 if ui.button("Delete").clicked() {
@@ -105,6 +129,17 @@ impl Common for TryingClues {
                     }
                     if ui.button("Within two spaces of animal").clicked() {
                         self.clues.push(Clue::TwoSpaceAnimal(Animal::Bear));
+                    }
+                    if ui.button("Within two spaces of structure type").clicked() {
+                        self.clues
+                            .push(Clue::TwoSpaceStructureKind(StructureKind::Shack));
+                    }
+                    if ui
+                        .button("Within three spaces of structure color")
+                        .clicked()
+                    {
+                        self.clues
+                            .push(Clue::ThreeSpaceStructureColor(StructureColor::Black));
                     }
                 });
         });
@@ -132,34 +167,29 @@ impl TryingClues {
 
         for &clue in &self.clues {
             for i in 0..self.map.0.len() {
-                match clue {
+                let pos = self.map.0[i].position;
+                let found = match clue {
                     Clue::WithinOneTerrain(terrain) => {
-                        let pos = self.map.0[i].position;
-                        let found = self.map.any(pos, 1, |t| t.terrain == terrain);
-                        if !found {
-                            self.map.0[i].small = true;
-                        }
+                        self.map.any(pos, 1, |t| t.terrain == terrain)
                     }
                     Clue::TwoTerrains(a, b) => {
                         let tile = &mut self.map.0[i];
-                        if tile.terrain != a && tile.terrain != b {
-                            tile.small = true;
-                        }
+                        tile.terrain != a && tile.terrain != b
                     }
-                    Clue::OneSpaceAnimal => {
-                        let pos = self.map.0[i].position;
-                        let found = self.map.any(pos, 1, |t| t.animal.is_some());
-                        if !found {
-                            self.map.0[i].small = true;
-                        }
-                    }
+                    Clue::OneSpaceAnimal => self.map.any(pos, 1, |t| t.animal.is_some()),
                     Clue::TwoSpaceAnimal(animal) => {
                         let pos = self.map.0[i].position;
-                        let found = self.map.any(pos, 2, |t| t.animal == Some(animal));
-                        if !found {
-                            self.map.0[i].small = true;
-                        }
+                        self.map.any(pos, 2, |t| t.animal == Some(animal))
                     }
+                    Clue::TwoSpaceStructureKind(kind) => self.map.any(pos, 2, |t| {
+                        t.structure.map(|s| s.kind == kind).unwrap_or(false)
+                    }),
+                    Clue::ThreeSpaceStructureColor(color) => self.map.any(pos, 3, |t| {
+                        t.structure.map(|s| s.color == color).unwrap_or(false)
+                    }),
+                };
+                if !found {
+                    self.map.0[i].small = true;
                 }
             }
         }

@@ -91,10 +91,19 @@ impl From<StructureColor> for Color {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]
 pub enum StructureKind {
     Shack,
     Stone,
+}
+
+impl fmt::Display for StructureKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StructureKind::Shack => write!(f, "Abandoned Shack"),
+            StructureKind::Stone => write!(f, "Standing Stone"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -242,6 +251,11 @@ pub enum Clue {
     OneSpaceAnimal,
     /// The creature is within two spaces of the animal territory.
     TwoSpaceAnimal(Animal),
+    /// The creature is within two spaces of the type of structure.
+    TwoSpaceStructureKind(StructureKind),
+    /// The creature is within two spaces of the type of structure.
+    ThreeSpaceStructureColor(StructureColor),
+    // TODO Rename variants to not include the number of steps.
 }
 
 /// A map of tiles.
@@ -249,10 +263,6 @@ pub enum Clue {
 pub struct Map(pub Vec<Tile>);
 
 impl Map {
-    pub fn get_mut(&mut self, at: Hex) -> Option<&mut Tile> {
-        self.0.iter_mut().find(|tile| tile.position == at)
-    }
-
     pub fn get(&self, at: Hex) -> Option<&Tile> {
         self.0.iter().find(|tile| tile.position == at)
     }
