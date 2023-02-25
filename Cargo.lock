@@ -1008,8 +1008,9 @@ dependencies = [
 
 [[package]]
 name = "hexx"
-version = "0.4.1"
-source = "git+https://github.com/ManevilleF/hexx.git?rev=b72ddea#b72ddea88530d0c0d091320caa1fe1bf834c0c29"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38555ee6167495ae006c1c8c4b5ca37b6375d18131853e2566eb33151c6b99c2"
 dependencies = [
  "glam",
  "itertools",
