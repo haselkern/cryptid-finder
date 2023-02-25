@@ -88,27 +88,33 @@ impl SubState {
 
                 match clue {
                     Clue::WithinOneTerrain(terrain) => {
-                        ui.label("Within one space of");
-                        terrain_switcher(format!("terrain-{i}"), ui, terrain);
+                        ui.horizontal(|ui| {
+                            ui.label("Within one space of");
+                            terrain_switcher(format!("terrain-{i}"), ui, terrain);
+                        });
                     }
                     Clue::TwoTerrains(a, b) => {
-                        ui.label("Either on");
-                        terrain_switcher(format!("terrain-{i}-a"), ui, a);
-                        ui.label("or on");
-                        terrain_switcher(format!("terrain-{i}-b"), ui, b);
+                        ui.horizontal(|ui| {
+                            ui.label("On");
+                            terrain_switcher(format!("terrain-{i}-a"), ui, a);
+                            ui.label("or");
+                            terrain_switcher(format!("terrain-{i}-b"), ui, b);
+                        });
                     }
                     Clue::OneSpaceAnimal => {
                         ui.label("Within one space of either animal");
                     }
                     Clue::TwoSpaceAnimal(animal) => {
-                        ui.label("Within two spaces of");
-                        egui::ComboBox::new(format!("animal-{i}"), "Territory")
-                            .selected_text(format!("{animal}"))
-                            .show_ui(ui, |ui| {
-                                for a in Animal::iter() {
-                                    ui.selectable_value(animal, a, format!("{a}"));
-                                }
-                            });
+                        ui.horizontal(|ui| {
+                            ui.label("Within two spaces of");
+                            egui::ComboBox::new(format!("animal-{i}"), "Territory")
+                                .selected_text(format!("{animal}"))
+                                .show_ui(ui, |ui| {
+                                    for a in Animal::iter() {
+                                        ui.selectable_value(animal, a, format!("{a}"));
+                                    }
+                                });
+                        });
                     },
                     
                 }
@@ -156,7 +162,7 @@ impl SubState {
 
 // Dropdown for switching terrain types.
 fn terrain_switcher(id: impl Hash, ui: &mut egui::Ui, terrain: &mut Terrain) {
-    egui::ComboBox::new(id, "Terrain")
+    egui::ComboBox::new(id, "")
         .selected_text(format!("{terrain}"))
         .show_ui(ui, |ui| {
             for t in Terrain::iter() {
