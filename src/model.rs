@@ -244,18 +244,17 @@ impl ParsedPiece {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Clue {
     /// The creature is with one space of the terrain.
-    WithinOneTerrain(Terrain),
+    Terrain(Terrain),
     /// The creature is on one of these types of terrain.
     TwoTerrains(Terrain, Terrain),
     /// The creature is within one space of either animal.
-    OneSpaceAnimal,
+    EitherAnimal,
     /// The creature is within two spaces of the animal territory.
-    TwoSpaceAnimal(Animal),
+    Animal(Animal),
     /// The creature is within two spaces of the type of structure.
-    TwoSpaceStructureKind(StructureKind),
+    StructureKind(StructureKind),
     /// The creature is within two spaces of the type of structure.
-    ThreeSpaceStructureColor(StructureColor),
-    // TODO Rename variants to not include the number of steps.
+    StructureColor(StructureColor),
 }
 
 /// A map of tiles.

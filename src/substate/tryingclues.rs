@@ -51,7 +51,7 @@ impl Common for TryingClues {
                 ui.separator();
 
                 match clue {
-                    Clue::WithinOneTerrain(terrain) => {
+                    Clue::Terrain(terrain) => {
                         ui.horizontal(|ui| {
                             ui.label("Within one space of");
                             terrain_switcher(format!("terrain-{i}"), ui, terrain);
@@ -65,10 +65,10 @@ impl Common for TryingClues {
                             terrain_switcher(format!("terrain-{i}-b"), ui, b);
                         });
                     }
-                    Clue::OneSpaceAnimal => {
+                    Clue::EitherAnimal => {
                         ui.label("Within one space of either animal");
                     }
-                    Clue::TwoSpaceAnimal(animal) => {
+                    Clue::Animal(animal) => {
                         ui.horizontal(|ui| {
                             ui.label("Within two spaces of");
                             egui::ComboBox::new(format!("animal-{i}"), "Territory")
@@ -80,7 +80,7 @@ impl Common for TryingClues {
                                 });
                         });
                     }
-                    Clue::TwoSpaceStructureKind(kind) => {
+                    Clue::StructureKind(kind) => {
                         ui.horizontal(|ui| {
                             ui.label("Within two spaces of");
                             egui::ComboBox::new(format!("structurekind-{i}"), "")
@@ -92,7 +92,7 @@ impl Common for TryingClues {
                                 });
                         });
                     }
-                    Clue::ThreeSpaceStructureColor(color) => {
+                    Clue::StructureColor(color) => {
                         ui.horizontal(|ui| {
                             ui.label("Within three spaces of");
                             egui::ComboBox::new(format!("structurecolor-{i}"), "structure")
@@ -118,28 +118,28 @@ impl Common for TryingClues {
                 .selected_text("Add clue")
                 .show_ui(ui, |ui| {
                     if ui.button("Within one space of terrain").clicked() {
-                        self.clues.push(Clue::WithinOneTerrain(Terrain::Desert));
+                        self.clues.push(Clue::Terrain(Terrain::Desert));
                     }
                     if ui.button("One of two terrains").clicked() {
                         self.clues
                             .push(Clue::TwoTerrains(Terrain::Desert, Terrain::Forest));
                     }
                     if ui.button("Within one space of either animal").clicked() {
-                        self.clues.push(Clue::OneSpaceAnimal);
+                        self.clues.push(Clue::EitherAnimal);
                     }
                     if ui.button("Within two spaces of animal").clicked() {
-                        self.clues.push(Clue::TwoSpaceAnimal(Animal::Bear));
+                        self.clues.push(Clue::Animal(Animal::Bear));
                     }
                     if ui.button("Within two spaces of structure type").clicked() {
                         self.clues
-                            .push(Clue::TwoSpaceStructureKind(StructureKind::Shack));
+                            .push(Clue::StructureKind(StructureKind::Shack));
                     }
                     if ui
                         .button("Within three spaces of structure color")
                         .clicked()
                     {
                         self.clues
-                            .push(Clue::ThreeSpaceStructureColor(StructureColor::Black));
+                            .push(Clue::StructureColor(StructureColor::Black));
                     }
                 });
         });
@@ -169,22 +169,22 @@ impl TryingClues {
             for i in 0..self.map.0.len() {
                 let pos = self.map.0[i].position;
                 let found = match clue {
-                    Clue::WithinOneTerrain(terrain) => {
+                    Clue::Terrain(terrain) => {
                         self.map.any(pos, 1, |t| t.terrain == terrain)
                     }
                     Clue::TwoTerrains(a, b) => {
                         let tile = &self.map.0[i];
                         tile.terrain == a || tile.terrain == b
                     }
-                    Clue::OneSpaceAnimal => self.map.any(pos, 1, |t| t.animal.is_some()),
-                    Clue::TwoSpaceAnimal(animal) => {
+                    Clue::EitherAnimal => self.map.any(pos, 1, |t| t.animal.is_some()),
+                    Clue::Animal(animal) => {
                         let pos = self.map.0[i].position;
                         self.map.any(pos, 2, |t| t.animal == Some(animal))
                     }
-                    Clue::TwoSpaceStructureKind(kind) => self.map.any(pos, 2, |t| {
+                    Clue::StructureKind(kind) => self.map.any(pos, 2, |t| {
                         t.structure.map(|s| s.kind == kind).unwrap_or(false)
                     }),
-                    Clue::ThreeSpaceStructureColor(color) => self.map.any(pos, 3, |t| {
+                    Clue::StructureColor(color) => self.map.any(pos, 3, |t| {
                         t.structure.map(|s| s.color == color).unwrap_or(false)
                     }),
                 };
