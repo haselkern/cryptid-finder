@@ -72,10 +72,10 @@ pub enum StructureColor {
 impl fmt::Display for StructureColor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            StructureColor::White => write!(f, "white"),
-            StructureColor::Green => write!(f, "green"),
-            StructureColor::Blue => write!(f, "blue"),
-            StructureColor::Black => write!(f, "black"),
+            StructureColor::White => write!(f, "White"),
+            StructureColor::Green => write!(f, "Green"),
+            StructureColor::Blue => write!(f, "Blue"),
+            StructureColor::Black => write!(f, "Black"),
         }
     }
 }
