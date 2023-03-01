@@ -1,26 +1,30 @@
 use std::hash::Hash;
 
+use hexx::Hex;
 use notan::egui::{self, Context};
 use strum::IntoEnumIterator;
 
-use crate::{
-    model::{Animal, Clue, Map, StructureColor, StructureKind, Terrain, Tile},
-    substate::placingstructures,
+use crate::model::{
+    Animal, Answer, Clue, Map, PlayerList, StructureColor, StructureKind, Terrain, Tile,
 };
 
-use super::Common;
+use super::{placingstructures::PlacingStructures, Common};
 
 #[derive(Debug)]
 pub struct TryingClues {
     map: Map,
     clues: Vec<Clue>,
+    highlight: Option<Hex>,
+    players: PlayerList,
 }
 
-impl From<&placingstructures::PlacingStructures> for TryingClues {
-    fn from(value: &placingstructures::PlacingStructures) -> Self {
+impl From<&PlacingStructures> for TryingClues {
+    fn from(value: &PlacingStructures) -> Self {
         let mut s = Self {
             map: Map(value.tiles().to_vec()),
             clues: Vec::new(),
+            highlight: Some(Hex::ZERO),
+            players: value.players.clone(),
         };
         s.scan_clues();
         s
@@ -38,10 +42,57 @@ impl Common for TryingClues {
     fn gui(&mut self, ctx: &Context) -> bool {
         let clues_before = self.clues.clone();
 
+        self.gui_for_clues(ctx);
+        self.gui_for_questions(ctx);
+
+        if clues_before != self.clues {
+            self.scan_clues();
+        }
+
+        false
+    }
+
+    fn highlight(&self) -> Option<Hex> {
+        self.highlight
+    }
+
+    fn click(&mut self, hex: Hex) {
+        self.highlight = self.map.get(hex).is_some().then_some(hex);
+    }
+}
+
+impl TryingClues {
+    fn gui_for_questions(&mut self, ctx: &Context) {
+        egui::Window::new("Answers").show(ctx, |ui| {
+            if let Some(selected_tile) = self.highlight.and_then(|hex| self.map.get_mut(hex)) {
+                ui.label("Set answers for the selected tile.");
+                ui.separator();
+                for player in self.players.iter() {
+                    let answer = selected_tile.answers.entry(player.id).or_default();
+                    ui.horizontal(|ui| {
+                        ui.label(&player.name);
+                        egui::ComboBox::new(format!("player-answer-{:?}", player.id), "")
+                            .selected_text(format!("{answer}"))
+                            .show_ui(ui, |ui| {
+                                for a in Answer::iter() {
+                                    ui.selectable_value(answer, a, format!("{a}"));
+                                }
+                            });
+                    });
+                }
+            } else {
+                ui.label("Select a tile to place anwers.");
+            }
+        });
+    }
+
+    fn gui_for_clues(&mut self, ctx: &Context) {
         // Index of clue to delete
         let mut delete_index = None;
 
         let remaining_tiles = self.map.0.iter().filter(|t| !t.small).count();
+
+        // TODO This UI needs to be revamped to better incorporate players and their given answers.
 
         egui::Window::new("Clues").show(ctx, |ui| {
             ui.label(format!("{remaining_tiles} tiles remain."));
@@ -131,15 +182,13 @@ impl Common for TryingClues {
                         self.clues.push(Clue::Animal(Animal::Bear));
                     }
                     if ui.button("Within two spaces of structure type").clicked() {
-                        self.clues
-                            .push(Clue::StructureKind(StructureKind::Shack));
+                        self.clues.push(Clue::StructureKind(StructureKind::Shack));
                     }
                     if ui
                         .button("Within three spaces of structure color")
                         .clicked()
                     {
-                        self.clues
-                            .push(Clue::StructureColor(StructureColor::Black));
+                        self.clues.push(Clue::StructureColor(StructureColor::Black));
                     }
                 });
         });
@@ -147,16 +196,8 @@ impl Common for TryingClues {
         if let Some(delete) = delete_index {
             self.clues.remove(delete);
         }
-
-        if clues_before != self.clues {
-            self.scan_clues();
-        }
-
-        false
     }
-}
 
-impl TryingClues {
     /// Go through all tiles and see if any clue applies to them.
     /// If no clue applies to them, they are drawn as small.
     fn scan_clues(&mut self) {
@@ -169,9 +210,7 @@ impl TryingClues {
             for i in 0..self.map.0.len() {
                 let pos = self.map.0[i].position;
                 let found = match clue {
-                    Clue::Terrain(terrain) => {
-                        self.map.any(pos, 1, |t| t.terrain == terrain)
-                    }
+                    Clue::Terrain(terrain) => self.map.any(pos, 1, |t| t.terrain == terrain),
                     Clue::TwoTerrains(a, b) => {
                         let tile = &self.map.0[i];
                         tile.terrain == a || tile.terrain == b

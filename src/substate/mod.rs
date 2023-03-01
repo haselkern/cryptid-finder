@@ -1,4 +1,5 @@
 use enum_dispatch::enum_dispatch;
+use hexx::Hex;
 use notan::egui;
 
 use crate::model::Tile;
@@ -18,6 +19,10 @@ pub trait Common {
     fn tiles_mut(&mut self) -> &mut [Tile];
     /// Show an egui. Return true to switch to the next state.
     fn gui(&mut self, ctx: &egui::Context) -> bool;
+    /// Draw a highlight around a tile, if needed.
+    fn highlight(&self) -> Option<Hex>;
+    /// Click on a tile.
+    fn click(&mut self, hex: Hex);
 }
 
 #[enum_dispatch(Common)]

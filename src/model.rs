@@ -1,4 +1,7 @@
-use std::fmt;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 use hexx::{Hex, HexMap, OffsetHexMode};
 use notan::prelude::Color;
@@ -35,15 +38,6 @@ impl fmt::Display for Terrain {
             Terrain::Mountain => write!(f, "Mountain"),
         }
     }
-}
-
-#[derive(Debug)]
-pub enum PlayerKind {
-    Alpha,
-    Beta,
-    Gamma,
-    Delta,
-    Epsilon,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]
@@ -121,6 +115,8 @@ pub struct Tile {
     pub structure: Option<Structure>,
     /// Small is true if this tile should be drawn a bit smaller than usual.
     pub small: bool,
+    /// Answers given by players questioning this tile.
+    pub answers: HashMap<PlayerID, Answer>,
 }
 
 /// Choice for building the world. User can select a piece and decide to rotate it 180°.
@@ -214,6 +210,7 @@ impl Piece {
                     animal,
                     structure: None, // Structures get added later
                     small: false,
+                    answers: HashMap::new(),
                 });
             }
         }
@@ -266,6 +263,10 @@ impl Map {
         self.0.iter().find(|tile| tile.position == at)
     }
 
+    pub fn get_mut(&mut self, at: Hex) -> Option<&mut Tile> {
+        self.0.iter_mut().find(|tile| tile.position == at)
+    }
+
     /// Check any fields for the condition. Position is always checked. Add fields with "distance".
     /// Distance 0 is only position. Distance 1 is position with direct neighbors, etc.
     /// Returns true if the condition is true for any field.
@@ -282,5 +283,77 @@ impl Map {
             }
         }
         false
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub struct PlayerID(usize);
+
+#[derive(Debug, Clone)]
+pub struct Player {
+    pub id: PlayerID,
+    pub name: String,
+    // TODO Add color for rendering
+}
+
+/// Answer a player gave on a tile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, EnumIter)]
+pub enum Answer {
+    /// The player gave no information for a tile.
+    None,
+    /// The player revealed that the cryptid may be on the tile in question.
+    Yes,
+    /// The player revealed that the cryptid cannot be on the tile in question.
+    No,
+}
+
+impl fmt::Display for Answer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Answer::None => write!(f, "Unknown"),
+            Answer::Yes => write!(f, "Yes"),
+            Answer::No => write!(f, "No"),
+        }
+    }
+}
+
+impl Default for Answer {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PlayerList(Vec<Player>);
+
+impl PlayerList {
+    pub fn get(&self, id: PlayerID) -> &Player {
+        self.0
+            .iter()
+            .find(|p| p.id == id)
+            .unwrap_or_else(|| panic!("Invalid {id:?} provided"))
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Player> {
+        self.0.iter()
+    }
+}
+
+impl<T, S> From<T> for PlayerList
+where
+    T: IntoIterator<Item = S>,
+    S: ToString,
+{
+    fn from(value: T) -> Self {
+        Self(
+            value
+                .into_iter()
+                .enumerate()
+                .map(|(i, name)| Player {
+                    id: PlayerID(i),
+                    name: name.to_string(),
+                })
+                .collect(),
+        )
     }
 }

@@ -1,22 +1,22 @@
+use hexx::Hex;
 use notan::egui;
 use strum::IntoEnumIterator;
 
-use crate::{
-    model::{Structure, StructureColor, StructureKind, Tile},
-    substate::buildingmap,
-};
+use crate::model::{PlayerList, Structure, StructureColor, StructureKind, Tile};
 
-use super::Common;
+use super::{buildingmap::BuildingMap, Common};
 
 #[derive(Debug)]
 pub struct PlacingStructures {
     map: Vec<Tile>,
+    pub players: PlayerList,
 }
 
-impl From<&buildingmap::BuildingMap> for PlacingStructures {
-    fn from(value: &buildingmap::BuildingMap) -> Self {
+impl From<&BuildingMap> for PlacingStructures {
+    fn from(value: &BuildingMap) -> Self {
         Self {
             map: value.tiles().to_vec(),
+            players: value.players.clone().into(),
         }
     }
 }
@@ -51,6 +51,12 @@ impl Common for PlacingStructures {
 
         next_state
     }
+
+    fn highlight(&self) -> Option<Hex> {
+        None
+    }
+
+    fn click(&mut self, _hex: Hex) {}
 }
 
 impl PlacingStructures {

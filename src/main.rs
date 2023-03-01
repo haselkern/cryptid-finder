@@ -16,9 +16,9 @@ use substate::{Common, SubState};
 
 #[derive(AppState)]
 struct State {
-    // Radius of the tiles to draw
+    /// Radius of the tiles to draw
     tile_radius: f32,
-    // Offset to draw the tiles at. Used for dragging with mouse.
+    /// Offset to draw the tiles at. Used for dragging with mouse.
     offset: Vec2,
     icons: HashMap<Terrain, Texture>,
     is_egui_hovered: bool,
@@ -180,6 +180,16 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
                 .rotate(PI);
         }
 
+        // This tile might be highlighted
+        if let Some(highlight) = state.sub.highlight() {
+            if highlight == tile.position {
+                draw.polygon(6, state.tile_radius * 0.8)
+                    .stroke(stroke_width)
+                    .stroke_color(Color::YELLOW)
+                    .rotate(app.timer.time_since_init());
+            }
+        }
+
         draw.transform().pop();
     }
     gfx.render(&draw);
@@ -219,13 +229,17 @@ fn update(app: &mut App, state: &mut State, layout: &HexLayout) {
         return;
     }
 
-    if app.mouse.left_is_down() {
-        let mouse = Vec2::from(app.mouse.position());
+    let mouse = Vec2::from(app.mouse.position());
+    let mouse_hex = layout.world_pos_to_hex(mouse);
 
+    if app.mouse.left_was_released() {
+        state.sub.click(mouse_hex);
+    }
+
+    if app.mouse.left_is_down() {
         match state.dragging {
             Dragging::None => {
                 // Start dragging a structure (if that is allowed) or the screen.
-                let mouse_hex = layout.world_pos_to_hex(mouse);
                 let over_tile = state.sub.tiles().iter().find(|t| t.position == mouse_hex);
                 let has_structure = over_tile.map(|t| t.structure.is_some()).unwrap_or(false);
 
