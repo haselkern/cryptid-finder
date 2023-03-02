@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     fmt,
 };
 
@@ -78,8 +78,7 @@ pub struct Tile {
     /// Small is true if this tile should be drawn a bit smaller than usual.
     pub small: bool,
     /// Answers given by players questioning this tile.
-    /// TODO Use BTreeMap to have consistent order when rendering.
-    pub answers: HashMap<PlayerID, Answer>,
+    pub answers: BTreeMap<PlayerID, Answer>,
 }
 
 /// Choice for building the world. User can select a piece and decide to rotate it 180°.
@@ -173,7 +172,7 @@ impl Piece {
                     animal,
                     structure: None, // Structures get added later
                     small: false,
-                    answers: HashMap::new(),
+                    answers: Default::default(),
                 });
             }
         }
@@ -360,7 +359,7 @@ impl Map {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
 pub struct PlayerID(usize);
 
 #[derive(Debug, Clone)]
