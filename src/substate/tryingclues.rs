@@ -13,6 +13,10 @@ use super::{placingstructures::PlacingStructures, Common};
 #[derive(Debug)]
 pub struct TryingClues {
     map: Map,
+    /// True: Manually experiment with different possible clues.
+    /// False: Deduce clues from given answers.
+    manual_clues: bool,
+    /// Manually entered clues
     clues: Vec<Clue>,
     highlight: Option<Hex>,
     players: PlayerList,
@@ -25,6 +29,7 @@ impl From<&PlacingStructures> for TryingClues {
             clues: Vec::new(),
             highlight: Some(Hex::ZERO),
             players: value.players.clone(),
+            manual_clues: false,
         };
         s.scan_clues();
         s
@@ -96,110 +101,130 @@ impl TryingClues {
 
         let remaining_tiles = self.map.0.iter().filter(|t| !t.small).count();
 
-        // TODO This UI needs to be revamped to better incorporate players and their given answers.
-
         egui::Window::new("Clues").show(ctx, |ui| {
             ui.label(format!("{remaining_tiles} tiles remain."));
 
-            // Edit existing clues
-            for (i, clue) in self.clues.iter_mut().enumerate() {
+            ui.checkbox(&mut self.manual_clues, "Enter clues manually");
+
+            if self.manual_clues {
+                // Edit existing clues
+                for (i, clue) in self.clues.iter_mut().enumerate() {
+                    ui.separator();
+
+                    match clue {
+                        Clue::Terrain(terrain) => {
+                            ui.horizontal(|ui| {
+                                ui.label("Within one space of");
+                                terrain_switcher(format!("terrain-{i}"), ui, terrain);
+                            });
+                        }
+                        Clue::TwoTerrains(a, b) => {
+                            ui.horizontal(|ui| {
+                                ui.label("On");
+                                terrain_switcher(format!("terrain-{i}-a"), ui, a);
+                                ui.label("or");
+                                terrain_switcher(format!("terrain-{i}-b"), ui, b);
+                            });
+                        }
+                        Clue::EitherAnimal => {
+                            ui.label("Within one space of either animal");
+                        }
+                        Clue::Animal(animal) => {
+                            ui.horizontal(|ui| {
+                                ui.label("Within two spaces of");
+                                egui::ComboBox::new(format!("animal-{i}"), "Territory")
+                                    .selected_text(format!("{animal}"))
+                                    .show_ui(ui, |ui| {
+                                        for a in Animal::iter() {
+                                            ui.selectable_value(animal, a, format!("{a}"));
+                                        }
+                                    });
+                            });
+                        }
+                        Clue::StructureKind(kind) => {
+                            ui.horizontal(|ui| {
+                                ui.label("Within two spaces of");
+                                egui::ComboBox::new(format!("structurekind-{i}"), "")
+                                    .selected_text(format!("{kind}"))
+                                    .show_ui(ui, |ui| {
+                                        for k in StructureKind::iter() {
+                                            ui.selectable_value(kind, k, format!("{k}"));
+                                        }
+                                    });
+                            });
+                        }
+                        Clue::StructureColor(color) => {
+                            ui.horizontal(|ui| {
+                                ui.label("Within three spaces of");
+                                egui::ComboBox::new(format!("structurecolor-{i}"), "structure")
+                                    .selected_text(format!("{color}"))
+                                    .show_ui(ui, |ui| {
+                                        for c in StructureColor::iter() {
+                                            ui.selectable_value(color, c, format!("{c}"));
+                                        }
+                                    });
+                            });
+                        }
+                    }
+
+                    if ui.button("Delete").clicked() {
+                        delete_index = Some(i);
+                    }
+                }
+
+                if let Some(delete) = delete_index {
+                    self.clues.remove(delete);
+                }
+
                 ui.separator();
 
-                match clue {
-                    Clue::Terrain(terrain) => {
-                        ui.horizontal(|ui| {
-                            ui.label("Within one space of");
-                            terrain_switcher(format!("terrain-{i}"), ui, terrain);
-                        });
-                    }
-                    Clue::TwoTerrains(a, b) => {
-                        ui.horizontal(|ui| {
-                            ui.label("On");
-                            terrain_switcher(format!("terrain-{i}-a"), ui, a);
-                            ui.label("or");
-                            terrain_switcher(format!("terrain-{i}-b"), ui, b);
-                        });
-                    }
-                    Clue::EitherAnimal => {
-                        ui.label("Within one space of either animal");
-                    }
-                    Clue::Animal(animal) => {
-                        ui.horizontal(|ui| {
-                            ui.label("Within two spaces of");
-                            egui::ComboBox::new(format!("animal-{i}"), "Territory")
-                                .selected_text(format!("{animal}"))
-                                .show_ui(ui, |ui| {
-                                    for a in Animal::iter() {
-                                        ui.selectable_value(animal, a, format!("{a}"));
-                                    }
-                                });
-                        });
-                    }
-                    Clue::StructureKind(kind) => {
-                        ui.horizontal(|ui| {
-                            ui.label("Within two spaces of");
-                            egui::ComboBox::new(format!("structurekind-{i}"), "")
-                                .selected_text(format!("{kind}"))
-                                .show_ui(ui, |ui| {
-                                    for k in StructureKind::iter() {
-                                        ui.selectable_value(kind, k, format!("{k}"));
-                                    }
-                                });
-                        });
-                    }
-                    Clue::StructureColor(color) => {
-                        ui.horizontal(|ui| {
-                            ui.label("Within three spaces of");
-                            egui::ComboBox::new(format!("structurecolor-{i}"), "structure")
-                                .selected_text(format!("{color}"))
-                                .show_ui(ui, |ui| {
-                                    for c in StructureColor::iter() {
-                                        ui.selectable_value(color, c, format!("{c}"));
-                                    }
-                                });
-                        });
-                    }
-                }
-
-                if ui.button("Delete").clicked() {
-                    delete_index = Some(i);
+                // Add a new clue
+                egui::ComboBox::new("combobox-new-clue", "")
+                    .selected_text("Add clue")
+                    .show_ui(ui, |ui| {
+                        if ui.button("Within one space of terrain").clicked() {
+                            self.clues.push(Clue::Terrain(Terrain::Desert));
+                        }
+                        if ui.button("One of two terrains").clicked() {
+                            self.clues
+                                .push(Clue::TwoTerrains(Terrain::Desert, Terrain::Forest));
+                        }
+                        if ui.button("Within one space of either animal").clicked() {
+                            self.clues.push(Clue::EitherAnimal);
+                        }
+                        if ui.button("Within two spaces of animal").clicked() {
+                            self.clues.push(Clue::Animal(Animal::Bear));
+                        }
+                        if ui.button("Within two spaces of structure type").clicked() {
+                            self.clues.push(Clue::StructureKind(StructureKind::Shack));
+                        }
+                        if ui
+                            .button("Within three spaces of structure color")
+                            .clicked()
+                        {
+                            self.clues.push(Clue::StructureColor(StructureColor::Black));
+                        }
+                    });
+            } else {
+                // Deduce clues for players
+                for player in self.players.iter() {
+                    ui.separator();
+                    // TODO Cache clues and only recompute when the answers change.
+                    let clues = self.map.clues_for_player(player.id);
+                    egui::CollapsingHeader::new(format!(
+                        "{} possible clues for {}",
+                        clues.len(),
+                        player.name
+                    ))
+                    .id_source(player.id)
+                    .show(ui, |ui| {
+                        for clue in clues {
+                            ui.label(format!("{clue}"));
+                        }
+                    });
                 }
             }
-
-            ui.separator();
-
-            // Add a new clue
-            egui::ComboBox::new("combobox-new-clue", "")
-                .selected_text("Add clue")
-                .show_ui(ui, |ui| {
-                    if ui.button("Within one space of terrain").clicked() {
-                        self.clues.push(Clue::Terrain(Terrain::Desert));
-                    }
-                    if ui.button("One of two terrains").clicked() {
-                        self.clues
-                            .push(Clue::TwoTerrains(Terrain::Desert, Terrain::Forest));
-                    }
-                    if ui.button("Within one space of either animal").clicked() {
-                        self.clues.push(Clue::EitherAnimal);
-                    }
-                    if ui.button("Within two spaces of animal").clicked() {
-                        self.clues.push(Clue::Animal(Animal::Bear));
-                    }
-                    if ui.button("Within two spaces of structure type").clicked() {
-                        self.clues.push(Clue::StructureKind(StructureKind::Shack));
-                    }
-                    if ui
-                        .button("Within three spaces of structure color")
-                        .clicked()
-                    {
-                        self.clues.push(Clue::StructureColor(StructureColor::Black));
-                    }
-                });
         });
-
-        if let Some(delete) = delete_index {
-            self.clues.remove(delete);
-        }
     }
 
     /// Go through all tiles and see if any clue applies to them.
@@ -212,25 +237,8 @@ impl TryingClues {
 
         for &clue in &self.clues {
             for i in 0..self.map.0.len() {
-                let pos = self.map.0[i].position;
-                let found = match clue {
-                    Clue::Terrain(terrain) => self.map.any(pos, 1, |t| t.terrain == terrain),
-                    Clue::TwoTerrains(a, b) => {
-                        let tile = &self.map.0[i];
-                        tile.terrain == a || tile.terrain == b
-                    }
-                    Clue::EitherAnimal => self.map.any(pos, 1, |t| t.animal.is_some()),
-                    Clue::Animal(animal) => {
-                        let pos = self.map.0[i].position;
-                        self.map.any(pos, 2, |t| t.animal == Some(animal))
-                    }
-                    Clue::StructureKind(kind) => self.map.any(pos, 2, |t| {
-                        t.structure.map(|s| s.kind == kind).unwrap_or(false)
-                    }),
-                    Clue::StructureColor(color) => self.map.any(pos, 3, |t| {
-                        t.structure.map(|s| s.color == color).unwrap_or(false)
-                    }),
-                };
+                let position = self.map.0[i].position;
+                let found = self.map.clue_applies(clue, position);
                 if !found {
                     self.map.0[i].small = true;
                 }

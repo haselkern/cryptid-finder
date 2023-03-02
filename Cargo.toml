@@ -8,5 +8,6 @@ edition = "2021"
 [dependencies]
 enum_dispatch = "0.3.11"
 hexx = "0.4.2"
+itertools = "0.10.5"
 notan = { version = "0.9.3", features = ["egui"] }
 strum = { version = "0.24.1", features = ["derive"] }

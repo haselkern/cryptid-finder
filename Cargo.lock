@@ -418,6 +418,7 @@ version = "0.1.0"
 dependencies = [
  "enum_dispatch",
  "hexx",
+ "itertools",
  "notan",
  "strum",
 ]

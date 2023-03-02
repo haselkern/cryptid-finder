@@ -4,6 +4,7 @@ use std::{
 };
 
 use hexx::{Hex, HexMap, OffsetHexMode};
+use itertools::Itertools;
 use notan::{egui, prelude::Color};
 use strum::{Display, EnumIter, IntoEnumIterator};
 
@@ -215,6 +216,40 @@ pub enum Clue {
     StructureColor(StructureColor),
 }
 
+impl Clue {
+    /// Returns every possible clue.
+    pub fn all() -> impl Iterator<Item = Self> {
+        let terrain = Terrain::iter().map(Clue::Terrain);
+        let two_terrains = Terrain::iter()
+            .combinations(2)
+            .map(|ts| Clue::TwoTerrains(ts[0], ts[1]));
+        let either_animal = [Clue::EitherAnimal];
+        let animal = Animal::iter().map(Clue::Animal);
+        let structure_kind = StructureKind::iter().map(Clue::StructureKind);
+        let structure_color = StructureColor::iter().map(Clue::StructureColor);
+
+        terrain
+            .chain(two_terrains)
+            .chain(either_animal)
+            .chain(animal)
+            .chain(structure_kind)
+            .chain(structure_color)
+    }
+}
+
+impl fmt::Display for Clue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Clue::Terrain(t) => write!(f, "Within one space of {t}"),
+            Clue::TwoTerrains(a, b) => write!(f, "On {a} or {b}"),
+            Clue::EitherAnimal => write!(f, "Within one space of bear or cougar"),
+            Clue::Animal(a) => write!(f, "Within two spaces of {a}"),
+            Clue::StructureKind(k) => write!(f, "Within two spaces of {k}"),
+            Clue::StructureColor(c) => write!(f, "Within three spaces of {c} structure"),
+        }
+    }
+}
+
 /// A map of tiles.
 #[derive(Debug, Default)]
 pub struct Map(pub Vec<Tile>);
@@ -226,6 +261,62 @@ impl Map {
 
     pub fn get_mut(&mut self, at: Hex) -> Option<&mut Tile> {
         self.0.iter_mut().find(|tile| tile.position == at)
+    }
+
+    /// Returns true if the cryptid could be at the given position according to the clue.
+    pub fn clue_applies(&self, clue: Clue, position: Hex) -> bool {
+        match clue {
+            Clue::Terrain(terrain) => self.any(position, 1, |t| t.terrain == terrain),
+            Clue::TwoTerrains(a, b) => match self.get(position) {
+                Some(tile) => tile.terrain == a || tile.terrain == b,
+                None => false,
+            },
+            Clue::EitherAnimal => self.any(position, 1, |t| t.animal.is_some()),
+            Clue::Animal(animal) => self.any(position, 2, |t| t.animal == Some(animal)),
+            Clue::StructureKind(kind) => self.any(position, 2, |t| {
+                t.structure.map(|s| s.kind == kind).unwrap_or(false)
+            }),
+            Clue::StructureColor(color) => self.any(position, 3, |t| {
+                t.structure.map(|s| s.color == color).unwrap_or(false)
+            }),
+        }
+    }
+
+    /// Return a list of possible clues for the player, respecting the answers they already gave.
+    pub fn clues_for_player(&self, player: PlayerID) -> Vec<Clue> {
+        let mut result = Vec::new();
+
+        for clue in Clue::all() {
+            let tiles_with_answer = self
+                .0
+                .iter()
+                .filter_map(|t| t.answers.get(&player).map(|&a| (a, t)));
+
+            // We now need to decide whether the clue is possible for the player by answering:
+            //     Does the clue contradict any answers the player gave?
+
+            let mut contradiction = false;
+            for (answer, tile) in tiles_with_answer {
+                let clue_applies = self.clue_applies(clue, tile.position);
+                let contradicts = match (answer, clue_applies) {
+                    (Answer::Unknown, _) => false,
+                    (Answer::Yes, true) => false,
+                    (Answer::Yes, false) => true,
+                    (Answer::No, true) => true,
+                    (Answer::No, false) => false,
+                };
+                if contradicts {
+                    contradiction = true;
+                    break;
+                }
+            }
+
+            if !contradiction {
+                result.push(clue);
+            }
+        }
+
+        result
     }
 
     /// Check any fields for the condition. Position is always checked. Add fields with "distance".
