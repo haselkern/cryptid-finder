@@ -164,6 +164,7 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
             draw.transform().pop();
         }
 
+        // Draw structure
         if let Some(building) = tile.structure {
             let color = building.color.into();
             let sides = match building.kind {
@@ -180,6 +181,43 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
                 .rotate(PI);
         }
 
+        // Draw answers in a little circle.
+        for (i, (&player_id, &answer)) in tile.answers.iter().enumerate() {
+            let player = state.sub.players().get(player_id);
+            let angle = i as f32;
+            let radius = state.tile_radius * 0.6;
+            let x = angle.cos() * radius;
+            let y = angle.sin() * radius;
+            let circle_radius = state.tile_radius * 0.2;
+            let box_width = state.tile_radius * 0.4;
+            let outline_stroke = (stroke_width * 0.5).max(1.0);
+            match answer {
+                Answer::Unknown => (),
+                Answer::Yes => {
+                    draw.circle(circle_radius)
+                        .color(player.color.into())
+                        .position(x, y);
+                    draw.circle(circle_radius)
+                        .stroke_color(Color::BLACK)
+                        .stroke(outline_stroke)
+                        .position(x, y);
+                }
+                Answer::No => {
+                    draw.rect(
+                        (x - box_width * 0.5, y - box_width * 0.5),
+                        (box_width, box_width),
+                    )
+                    .color(player.color.into());
+                    draw.rect(
+                        (x - box_width * 0.5, y - box_width * 0.5),
+                        (box_width, box_width),
+                    )
+                    .stroke_color(Color::BLACK)
+                    .stroke(outline_stroke);
+                }
+            }
+        }
+
         // This tile might be highlighted
         if let Some(highlight) = state.sub.highlight() {
             if highlight == tile.position {
@@ -192,6 +230,7 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
 
         draw.transform().pop();
     }
+
     gfx.render(&draw);
 
     let mut switch_state = false;

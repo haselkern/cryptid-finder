@@ -59,6 +59,10 @@ impl Common for TryingClues {
     fn click(&mut self, hex: Hex) {
         self.highlight = self.map.get(hex).is_some().then_some(hex);
     }
+
+    fn players(&self) -> &PlayerList {
+        &self.players
+    }
 }
 
 impl TryingClues {

@@ -2,7 +2,7 @@ use enum_dispatch::enum_dispatch;
 use hexx::Hex;
 use notan::egui;
 
-use crate::model::Tile;
+use crate::model::{PlayerList, Tile};
 
 mod buildingmap;
 mod placingstructures;
@@ -23,6 +23,7 @@ pub trait Common {
     fn highlight(&self) -> Option<Hex>;
     /// Click on a tile.
     fn click(&mut self, hex: Hex);
+    fn players(&self) -> &PlayerList;
 }
 
 #[enum_dispatch(Common)]

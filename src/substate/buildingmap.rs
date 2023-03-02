@@ -144,6 +144,10 @@ impl Common for BuildingMap {
     }
 
     fn click(&mut self, _hex: Hex) {}
+
+    fn players(&self) -> &PlayerList {
+        &self.players
+    }
 }
 
 impl BuildingMap {
