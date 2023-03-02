@@ -5,9 +5,9 @@ use std::{
 
 use hexx::{Hex, HexMap, OffsetHexMode};
 use notan::{egui, prelude::Color};
-use strum::{EnumIter, IntoEnumIterator, Display};
+use strum::{Display, EnumIter, IntoEnumIterator};
 
-#[derive(Debug, Clone, Copy, EnumIter, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, EnumIter, PartialEq, Eq, Hash, Display)]
 pub enum Terrain {
     Desert,
     Forest,
@@ -28,50 +28,18 @@ impl From<Terrain> for Color {
     }
 }
 
-impl fmt::Display for Terrain {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Terrain::Desert => write!(f, "Desert"),
-            Terrain::Forest => write!(f, "Forest"),
-            Terrain::Water => write!(f, "Water"),
-            Terrain::Swamp => write!(f, "Swamp"),
-            Terrain::Mountain => write!(f, "Mountain"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Display)]
 pub enum Animal {
     Bear,
     Cougar,
 }
 
-impl fmt::Display for Animal {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Animal::Bear => write!(f, "Bear"),
-            Animal::Cougar => write!(f, "Cougar"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Display)]
 pub enum StructureColor {
     White,
     Green,
     Blue,
     Black,
-}
-
-impl fmt::Display for StructureColor {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            StructureColor::White => write!(f, "White"),
-            StructureColor::Green => write!(f, "Green"),
-            StructureColor::Blue => write!(f, "Blue"),
-            StructureColor::Black => write!(f, "Black"),
-        }
-    }
 }
 
 impl From<StructureColor> for Color {
@@ -85,19 +53,12 @@ impl From<StructureColor> for Color {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Display)]
 pub enum StructureKind {
+    #[strum(to_string = "Abandoned Shack")]
     Shack,
+    #[strum(to_string = "Standing Stone")]
     Stone,
-}
-
-impl fmt::Display for StructureKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            StructureKind::Shack => write!(f, "Abandoned Shack"),
-            StructureKind::Stone => write!(f, "Standing Stone"),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -325,30 +286,19 @@ impl From<PlayerColor> for Color {
 }
 
 /// Answer a player gave on a tile.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, EnumIter)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, EnumIter, Display)]
 pub enum Answer {
     /// The player gave no information for a tile.
-    None,
+    Unknown,
     /// The player revealed that the cryptid may be on the tile in question.
     Yes,
     /// The player revealed that the cryptid cannot be on the tile in question.
     No,
 }
 
-// TODO Replace manual Display impls in this file with strum::Display derive.
-impl fmt::Display for Answer {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Answer::None => write!(f, "Unknown"),
-            Answer::Yes => write!(f, "Yes"),
-            Answer::No => write!(f, "No"),
-        }
-    }
-}
-
 impl Default for Answer {
     fn default() -> Self {
-        Self::None
+        Self::Unknown
     }
 }
 
