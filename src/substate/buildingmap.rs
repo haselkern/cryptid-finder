@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
 use hexx::{Hex, OffsetHexMode};
-use notan::egui;
+use notan::egui::{self, color_picker};
 use strum::IntoEnumIterator;
 
-use crate::model::{Piece, PieceChoice, Tile};
+use crate::model::{Piece, PieceChoice, PlayerColor, PlayerList, Tile};
 
 use super::Common;
 
@@ -13,7 +13,7 @@ use super::Common;
 pub struct BuildingMap {
     selected_pieces: [PieceChoice; 6],
     tiles: Vec<Tile>,
-    pub players: Vec<String>,
+    pub players: PlayerList,
     map_ready: bool,
     players_ready: bool,
 }
@@ -29,7 +29,7 @@ impl Default for BuildingMap {
             tiles: Vec::new(),
             map_ready: false,
             players_ready: false,
-            players: Vec::new(),
+            players: PlayerList::default(),
         };
 
         s.rebuild_tiles();
@@ -86,11 +86,28 @@ impl Common for BuildingMap {
         if !self.players_ready {
             egui::Window::new("Players").show(ctx, |ui| {
                 let mut remove = None;
-                for (i, player) in self.players.iter_mut().enumerate() {
+                for player in self.players.iter_mut() {
                     ui.horizontal(|ui| {
-                        ui.text_edit_singleline(player);
+                        ui.text_edit_singleline(&mut player.name);
+
+                        let icon_color = player.color.into();
+                        egui::ComboBox::new(format!("color-for-player-{:?}", player.id), "")
+                            .selected_text(format!("{}", player.color))
+                            .icon(move |ui, rect, _visuals, _is_open, _above_or_below| {
+                                color_picker::show_color_at(ui.painter(), icon_color, rect);
+                            })
+                            .show_ui(ui, |ui| {
+                                for option in PlayerColor::iter() {
+                                    ui.selectable_value(
+                                        &mut player.color,
+                                        option,
+                                        format!("{option}"),
+                                    );
+                                }
+                            });
+
                         if ui.button("X").clicked() {
-                            remove = Some(i);
+                            remove = Some(player.id);
                         }
                     });
                 }
@@ -100,8 +117,8 @@ impl Common for BuildingMap {
                 }
 
                 ui.horizontal(|ui| {
-                    if ui.button("Add").clicked() {
-                        self.players.push("Some Player".to_owned());
+                    if self.players.len() < 5 && ui.button("Add").clicked() {
+                        self.players.push_new();
                     }
 
                     if self.players.len() >= 3 && self.players.len() <= 5 {

@@ -16,7 +16,7 @@ impl From<&BuildingMap> for PlacingStructures {
     fn from(value: &BuildingMap) -> Self {
         Self {
             map: value.tiles().to_vec(),
-            players: value.players.clone().into(),
+            players: value.players.clone(),
         }
     }
 }

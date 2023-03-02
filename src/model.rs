@@ -4,8 +4,8 @@ use std::{
 };
 
 use hexx::{Hex, HexMap, OffsetHexMode};
-use notan::prelude::Color;
-use strum::EnumIter;
+use notan::{egui, prelude::Color};
+use strum::{EnumIter, IntoEnumIterator, Display};
 
 #[derive(Debug, Clone, Copy, EnumIter, PartialEq, Eq, Hash)]
 pub enum Terrain {
@@ -293,7 +293,35 @@ pub struct PlayerID(usize);
 pub struct Player {
     pub id: PlayerID,
     pub name: String,
-    // TODO Add color for rendering
+    pub color: PlayerColor,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash, Display)]
+pub enum PlayerColor {
+    Red,
+    Purple,
+    Orange,
+    Green,
+    Blue,
+}
+
+impl From<PlayerColor> for egui::Color32 {
+    fn from(value: PlayerColor) -> Self {
+        match value {
+            PlayerColor::Red => Self::from_rgb(204, 52, 36),
+            PlayerColor::Purple => Self::from_rgb(135, 87, 156),
+            PlayerColor::Orange => Self::from_rgb(246, 159, 38),
+            PlayerColor::Green => Self::from_rgb(38, 158, 117),
+            PlayerColor::Blue => Self::from_rgb(85, 197, 223),
+        }
+    }
+}
+
+impl From<PlayerColor> for Color {
+    fn from(value: PlayerColor) -> Self {
+        let color: egui::Color32 = value.into();
+        Color::from(color.to_array())
+    }
 }
 
 /// Answer a player gave on a tile.
@@ -307,6 +335,7 @@ pub enum Answer {
     No,
 }
 
+// TODO Replace manual Display impls in this file with strum::Display derive.
 impl fmt::Display for Answer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -323,7 +352,7 @@ impl Default for Answer {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PlayerList(Vec<Player>);
 
 impl PlayerList {
@@ -334,26 +363,37 @@ impl PlayerList {
             .unwrap_or_else(|| panic!("Invalid {id:?} provided"))
     }
 
+    pub fn remove(&mut self, id: PlayerID) {
+        self.0.retain(|p| p.id != id);
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &Player> {
         self.0.iter()
     }
-}
 
-impl<T, S> From<T> for PlayerList
-where
-    T: IntoIterator<Item = S>,
-    S: ToString,
-{
-    fn from(value: T) -> Self {
-        Self(
-            value
-                .into_iter()
-                .enumerate()
-                .map(|(i, name)| Player {
-                    id: PlayerID(i),
-                    name: name.to_string(),
-                })
-                .collect(),
-        )
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Player> {
+        self.0.iter_mut()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn push_new(&mut self) {
+        let id = self.0.iter().map(|p| p.id.0).max().unwrap_or(0) + 1;
+        let all_colors: HashSet<PlayerColor> = PlayerColor::iter().collect();
+        let taken_colors: HashSet<PlayerColor> = self.0.iter().map(|p| p.color).collect();
+        let possible_colors = all_colors.difference(&taken_colors);
+        let color = possible_colors
+            .into_iter()
+            .copied()
+            .next()
+            .unwrap_or(PlayerColor::Red);
+
+        self.0.push(Player {
+            id: PlayerID(id),
+            name: "Some Player".to_owned(),
+            color,
+        })
     }
 }
