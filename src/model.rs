@@ -35,7 +35,7 @@ pub enum Animal {
     Cougar,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Display, Hash)]
 pub enum StructureColor {
     White,
     Green,
@@ -54,7 +54,7 @@ impl From<StructureColor> for Color {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Display, Hash)]
 pub enum StructureKind {
     #[strum(to_string = "Abandoned Shack")]
     Shack,
@@ -62,14 +62,14 @@ pub enum StructureKind {
     Stone,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Structure {
     pub kind: StructureKind,
     pub color: StructureColor,
 }
 
 /// A single hexagon in the game world.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tile {
     pub position: Hex,
     pub terrain: Terrain,
@@ -78,6 +78,7 @@ pub struct Tile {
     /// Small is true if this tile should be drawn a bit smaller than usual.
     pub small: bool,
     /// Answers given by players questioning this tile.
+    /// TODO Use BTreeMap to have consistent order when rendering.
     pub answers: HashMap<PlayerID, Answer>,
 }
 
@@ -217,16 +218,19 @@ pub enum Clue {
 }
 
 impl Clue {
-    /// Returns every possible clue.
-    pub fn all() -> impl Iterator<Item = Self> {
+    /// Returns every possible clue for the available structure colors/kinds.
+    pub fn all(
+        structure_colors: impl IntoIterator<Item = StructureColor>,
+        structure_kinds: impl IntoIterator<Item = StructureKind>,
+    ) -> impl Iterator<Item = Self> {
         let terrain = Terrain::iter().map(Clue::Terrain);
         let two_terrains = Terrain::iter()
             .combinations(2)
             .map(|ts| Clue::TwoTerrains(ts[0], ts[1]));
         let either_animal = [Clue::EitherAnimal];
         let animal = Animal::iter().map(Clue::Animal);
-        let structure_kind = StructureKind::iter().map(Clue::StructureKind);
-        let structure_color = StructureColor::iter().map(Clue::StructureColor);
+        let structure_kind = structure_kinds.into_iter().map(Clue::StructureKind);
+        let structure_color = structure_colors.into_iter().map(Clue::StructureColor);
 
         terrain
             .chain(two_terrains)
@@ -282,11 +286,29 @@ impl Map {
         }
     }
 
+    /// Returns [StructureColor]s present on the map.
+    pub fn structure_colors(&self) -> impl Iterator<Item = StructureColor> + '_ {
+        self.0
+            .iter()
+            .filter_map(|t| t.structure)
+            .map(|s| s.color)
+            .unique()
+    }
+
+    /// Returns [StructureKind]s present on the map.
+    pub fn structure_kinds(&self) -> impl Iterator<Item = StructureKind> + '_ {
+        self.0
+            .iter()
+            .filter_map(|t| t.structure)
+            .map(|s| s.kind)
+            .unique()
+    }
+
     /// Return a list of possible clues for the player, respecting the answers they already gave.
     pub fn clues_for_player(&self, player: PlayerID) -> Vec<Clue> {
         let mut result = Vec::new();
 
-        for clue in Clue::all() {
+        for clue in Clue::all(self.structure_colors(), self.structure_kinds()) {
             let tiles_with_answer = self
                 .0
                 .iter()
