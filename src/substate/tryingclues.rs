@@ -15,7 +15,10 @@ pub struct TryingClues {
     map: Map,
     /// Manually entered clues
     clues: HashMap<PlayerID, Clue>,
+    /// Map from player to a bool. True: We know the clue; False: The clue should be deduced.
     known_clues: HashMap<PlayerID, bool>,
+    /// Cache for clues deduced from answers.
+    deduced_clues: HashMap<PlayerID, Vec<Clue>>,
     highlight: Option<Hex>,
     players: PlayerList,
 }
@@ -26,10 +29,12 @@ impl From<&PlacingStructures> for TryingClues {
             map: Map(value.tiles().to_vec()),
             highlight: Some(Hex::ZERO),
             players: value.players.clone(),
-            clues: HashMap::new(),
-            known_clues: HashMap::new(),
+            clues: Default::default(),
+            known_clues: Default::default(),
+            deduced_clues: Default::default(),
         };
-        s.scan_clues();
+        s.deduce_clues();
+        s.update_map_from_clues();
         s
     }
 }
@@ -50,11 +55,16 @@ impl Common for TryingClues {
         self.gui_for_clues(ctx);
         self.gui_for_questions(ctx);
 
-        if clues_before != self.clues
-            || known_clues_before != self.known_clues
-            || !itertools::equal(&tiles_before, self.tiles())
-        {
-            self.scan_clues();
+        let clues_changed = clues_before != self.clues;
+        let known_clues_changed = known_clues_before != self.known_clues;
+        let tiles_changed = !itertools::equal(&tiles_before, self.tiles());
+
+        if tiles_changed {
+            self.deduce_clues();
+        }
+
+        if clues_changed || known_clues_changed || tiles_changed {
+            self.update_map_from_clues();
         }
 
         false
@@ -206,8 +216,7 @@ impl TryingClues {
                         }
                     } else {
                         // Show deduced clues.
-                        // TODO Cache clues and only recompute when the answers change.
-                        let clues = self.map.clues_for_player(player);
+                        let clues = self.deduced_clues.entry(player).or_default();
                         egui::CollapsingHeader::new(format!("{} possible clues", clues.len()))
                             .id_source(player)
                             .show(ui, |ui| {
@@ -221,9 +230,17 @@ impl TryingClues {
         });
     }
 
+    /// Build a list of possible clues for each player according to their given answers.
+    fn deduce_clues(&mut self) {
+        for player in self.players.iter() {
+            let clues = self.map.clues_for_player(player.id);
+            self.deduced_clues.insert(player.id, clues);
+        }
+    }
+
     /// Go through all tiles and see if any clue applies to them.
     /// If no clue applies to them, they are drawn as small.
-    fn scan_clues(&mut self) {
+    fn update_map_from_clues(&mut self) {
         // Set tile to be big. Should any clue fail, then it will be small.
         for tile in &mut self.map.0 {
             tile.small = false;
@@ -252,8 +269,8 @@ impl TryingClues {
             let position = self.map.0[i].position;
             for player in self.players.iter() {
                 let mut found_any = false;
-                for clue in self.map.clues_for_player(player.id) {
-                    if self.map.clue_applies(clue, position) {
+                for clue in self.deduced_clues.entry(player.id).or_default() {
+                    if self.map.clue_applies(*clue, position) {
                         found_any = true;
                         break;
                     }
