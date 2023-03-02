@@ -84,6 +84,14 @@ impl Common for BuildingMap {
         }
 
         if !self.players_ready {
+            let num_used_colors = self
+                .players
+                .iter()
+                .map(|p| p.color)
+                .collect::<HashSet<_>>()
+                .len();
+            let are_player_colors_unique = self.players.len() == num_used_colors;
+
             egui::Window::new("Players").show(ctx, |ui| {
                 let mut remove = None;
                 for player in self.players.iter_mut() {
@@ -121,12 +129,18 @@ impl Common for BuildingMap {
                         self.players.push_new();
                     }
 
-                    if self.players.len() >= 3 && self.players.len() <= 5 {
-                        if ui.button("Ready").clicked() {
-                            self.players_ready = true;
-                        }
+                    let block = if self.players.len() < 3 || self.players.len() > 5 {
+                        Some("Add 3 to 5 players to continue")
+                    } else if !are_player_colors_unique {
+                        Some("Use colors only once to continue")
                     } else {
-                        ui.label("Add 3 to 5 players to continue");
+                        None
+                    };
+
+                    if let Some(block) = block {
+                        ui.label(block);
+                    } else if ui.button("Ready").clicked() {
+                        self.players_ready = true;
                     }
                 });
             });
