@@ -2,12 +2,15 @@ use std::{collections::HashMap, hash::Hash};
 
 use hexx::Hex;
 use itertools::Itertools;
-use notan::egui::{self, Context};
+use notan::egui::{self, Grid, Label};
 use strum::IntoEnumIterator;
 
-use crate::model::{
-    Animal, Answer, Clue, Hint, Map, PlayerID, PlayerList, StructureColor, StructureKind, Terrain,
-    Tile,
+use crate::{
+    model::{
+        Animal, Answer, Clue, Hint, Map, PlayerID, PlayerList, StructureColor, StructureKind,
+        Terrain, Tile,
+    },
+    LAYOUT_SPACE,
 };
 
 use super::{placingstructures::PlacingStructures, Common};
@@ -66,16 +69,18 @@ impl Common for TryingClues {
         &mut self.map.0
     }
 
-    fn gui(&mut self, ctx: &Context) -> bool {
+    fn gui(&mut self, ui: &mut egui::Ui) -> bool {
         let clues_before = self.clues.clone();
         let known_clues_before = self.known_clues.clone();
         let tiles_before = self.tiles().to_vec();
         let user_before = self.user;
 
         // TODO All these windows are starting to get annoying. Try to replace them with sidebar panels.
-        self.gui_for_questions(ctx);
-        self.gui_for_cheats(ctx);
-        self.gui_for_clues(ctx);
+        self.gui_for_answers(ui);
+        ui.add_space(LAYOUT_SPACE);
+        self.gui_for_cheats(ui);
+        ui.add_space(LAYOUT_SPACE);
+        self.gui_for_clues(ui);
 
         let clues_changed = clues_before != self.clues;
         let known_clues_changed = known_clues_before != self.known_clues;
@@ -120,39 +125,39 @@ impl Common for TryingClues {
 }
 
 impl TryingClues {
-    fn gui_for_cheats(&mut self, ctx: &Context) {
-        egui::Window::new("Cheat").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label("You are");
-                egui::ComboBox::new("cheat-player-select", "")
-                    .selected_text(&self.players.get(self.user).name)
-                    .show_ui(ui, |ui| {
-                        for player in self.players.iter() {
-                            ui.selectable_value(&mut self.user, player.id, &player.name);
-                        }
-                    });
-            });
-            ui.separator();
+    fn gui_for_cheats(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Cheat");
+        ui.horizontal(|ui| {
+            ui.label("You are");
+            egui::ComboBox::new("cheat-player-select", "")
+                .selected_text(&self.players.get(self.user).name)
+                .show_ui(ui, |ui| {
+                    for player in self.players.iter() {
+                        ui.selectable_value(&mut self.user, player.id, &player.name);
+                    }
+                });
+        });
 
-            if self.hints.is_empty() {
-                ui.label("No hints available or map changed.");
+        if self.hints.is_empty() {
+            ui.horizontal(|ui| {
                 if ui.button("Refresh").clicked() {
                     self.calculate_hints();
                 }
-            }
+                ui.add(Label::new("No hints available or map changed.").wrap(true));
+            });
+        }
 
-            for hint in &self.hints {
-                ui.horizontal(|ui| {
-                    if ui.button("Show").clicked() {
-                        self.highlights = hint.tiles.to_vec();
-                    }
-                    ui.label(&hint.text);
-                });
-            }
-        });
+        for hint in &self.hints {
+            ui.horizontal(|ui| {
+                if ui.button("Show").clicked() {
+                    self.highlights = hint.tiles.to_vec();
+                }
+                ui.add(Label::new(&hint.text).wrap(true));
+            });
+        }
     }
 
-    fn gui_for_questions(&mut self, ctx: &Context) {
+    fn gui_for_answers(&mut self, ui: &mut egui::Ui) {
         // Answers can only be placed when there is a single selection.
         let selection = if self.highlights.len() == 1 {
             self.highlights.first().copied()
@@ -160,149 +165,147 @@ impl TryingClues {
             None
         };
 
-        egui::Window::new("Answers").show(ctx, |ui| {
-            if let Some(selected_tile) = selection.and_then(|hex| self.map.get_mut(hex)) {
-                ui.label("Set answers for the selected tile.");
-                ui.separator();
+        ui.heading("Answers");
+        if let Some(selected_tile) = selection.and_then(|hex| self.map.get_mut(hex)) {
+            ui.label("Set answers for the selected tile.");
+            Grid::new("answer-grid").show(ui, |ui| {
                 for player in self.players.iter() {
                     let answer = selected_tile.answers.entry(player.id).or_default();
-                    ui.horizontal(|ui| {
-                        ui.label(&player.name);
-                        egui::ComboBox::new(format!("player-answer-{:?}", player.id), "")
-                            .selected_text(format!("{answer}"))
-                            .show_ui(ui, |ui| {
-                                for a in Answer::iter() {
-                                    ui.selectable_value(answer, a, format!("{a}"));
-                                }
-                            });
-                    });
+                    ui.label(&player.name);
+                    egui::ComboBox::new(format!("player-answer-{:?}", player.id), "")
+                        .selected_text(format!("{answer}"))
+                        .show_ui(ui, |ui| {
+                            for a in Answer::iter() {
+                                ui.selectable_value(answer, a, format!("{a}"));
+                            }
+                        });
+                    ui.end_row();
                 }
-            } else {
-                ui.label("Select a tile to place anwers.");
-            }
-        });
+            });
+        } else {
+            ui.label("Select a tile to place anwers.");
+        }
     }
 
-    fn gui_for_clues(&mut self, ctx: &Context) {
+    fn gui_for_clues(&mut self, ui: &mut egui::Ui) {
         let remaining_tiles = self.map.0.iter().filter(|t| !t.small).count();
 
-        egui::Window::new("Clues").show(ctx, |ui| {
-            ui.label(format!("{remaining_tiles} tiles remain."));
+        ui.heading("Clues");
+        ui.label(format!("{remaining_tiles} tiles remain."));
 
-            for player in self.players.iter().map(|p| p.id) {
-                ui.separator();
-                // Dont add and remove the clue for a player, just switch to deduction mode, remembering the clue.
-                {
-                    let clue = self
-                        .clues
-                        .entry(player)
-                        .or_insert(Clue::Terrain(Terrain::Desert));
-                    let known = self.known_clues.entry(player).or_default();
-                    ui.horizontal(|ui| {
-                        ui.label(self.players.get(player).name.to_string());
-                        ui.toggle_value(known, "Known");
-                    });
-                    if *known {
-                        // Change clue type
-                        egui::ComboBox::new(format!("combobox-clue-{player:?}"), "")
-                            .selected_text("Edit type")
-                            .show_ui(ui, |ui| {
-                                if ui.button("Within one space of terrain").clicked() {
-                                    *clue = Clue::Terrain(Terrain::Desert);
-                                }
-                                if ui.button("One of two terrains").clicked() {
-                                    *clue = Clue::TwoTerrains(Terrain::Desert, Terrain::Forest);
-                                }
-                                if ui.button("Within one space of either animal").clicked() {
-                                    *clue = Clue::EitherAnimal;
-                                }
-                                if ui.button("Within two spaces of animal").clicked() {
-                                    *clue = Clue::Animal(Animal::Bear);
-                                }
-                                if ui.button("Within two spaces of structure type").clicked() {
-                                    *clue = Clue::StructureKind(StructureKind::Shack);
-                                }
-                                if ui
-                                    .button("Within three spaces of structure color")
-                                    .clicked()
-                                {
-                                    *clue = Clue::StructureColor(StructureColor::Black);
-                                }
+        for player in self.players.iter().map(|p| p.id) {
+            ui.separator();
+            // Dont add and remove the clue for a player, just switch to deduction mode, remembering the clue.
+            {
+                let clue = self
+                    .clues
+                    .entry(player)
+                    .or_insert(Clue::Terrain(Terrain::Desert));
+                let known = self.known_clues.entry(player).or_default();
+                ui.horizontal(|ui| {
+                    ui.label(self.players.get(player).name.to_string());
+                    ui.toggle_value(known, "Known");
+                });
+                if *known {
+                    // Change clue type
+                    egui::ComboBox::new(format!("combobox-clue-{player:?}"), "")
+                        .selected_text("Edit type")
+                        .show_ui(ui, |ui| {
+                            if ui.button("Within one space of terrain").clicked() {
+                                *clue = Clue::Terrain(Terrain::Desert);
+                            }
+                            if ui.button("One of two terrains").clicked() {
+                                *clue = Clue::TwoTerrains(Terrain::Desert, Terrain::Forest);
+                            }
+                            if ui.button("Within one space of either animal").clicked() {
+                                *clue = Clue::EitherAnimal;
+                            }
+                            if ui.button("Within two spaces of animal").clicked() {
+                                *clue = Clue::Animal(Animal::Bear);
+                            }
+                            if ui.button("Within two spaces of structure type").clicked() {
+                                *clue = Clue::StructureKind(StructureKind::Shack);
+                            }
+                            if ui
+                                .button("Within three spaces of structure color")
+                                .clicked()
+                            {
+                                *clue = Clue::StructureColor(StructureColor::Black);
+                            }
+                        });
+
+                    // Edit clue
+                    match clue {
+                        Clue::Terrain(terrain) => {
+                            ui.horizontal(|ui| {
+                                ui.label("Within one space of");
+                                terrain_switcher(format!("terrain-{player:?}"), ui, terrain);
                             });
-
-                        // Edit clue
-                        match clue {
-                            Clue::Terrain(terrain) => {
-                                ui.horizontal(|ui| {
-                                    ui.label("Within one space of");
-                                    terrain_switcher(format!("terrain-{player:?}"), ui, terrain);
-                                });
-                            }
-                            Clue::TwoTerrains(a, b) => {
-                                ui.horizontal(|ui| {
-                                    ui.label("On");
-                                    terrain_switcher(format!("terrain-{player:?}-a"), ui, a);
-                                    ui.label("or");
-                                    terrain_switcher(format!("terrain-{player:?}-b"), ui, b);
-                                });
-                            }
-                            Clue::EitherAnimal => {
-                                ui.label("Within one space of either animal");
-                            }
-                            Clue::Animal(animal) => {
-                                ui.horizontal(|ui| {
-                                    ui.label("Within two spaces of");
-                                    egui::ComboBox::new(format!("animal-{player:?}"), "Territory")
-                                        .selected_text(format!("{animal}"))
-                                        .show_ui(ui, |ui| {
-                                            for a in Animal::iter() {
-                                                ui.selectable_value(animal, a, format!("{a}"));
-                                            }
-                                        });
-                                });
-                            }
-                            Clue::StructureKind(kind) => {
-                                ui.horizontal(|ui| {
-                                    ui.label("Within two spaces of");
-                                    egui::ComboBox::new(format!("structurekind-{player:?}"), "")
-                                        .selected_text(format!("{kind}"))
-                                        .show_ui(ui, |ui| {
-                                            for k in StructureKind::iter() {
-                                                ui.selectable_value(kind, k, format!("{k}"));
-                                            }
-                                        });
-                                });
-                            }
-                            Clue::StructureColor(color) => {
-                                ui.horizontal(|ui| {
-                                    ui.label("Within three spaces of");
-                                    egui::ComboBox::new(
-                                        format!("structurecolor-{player:?}"),
-                                        "structure",
-                                    )
-                                    .selected_text(format!("{color}"))
+                        }
+                        Clue::TwoTerrains(a, b) => {
+                            ui.horizontal(|ui| {
+                                ui.label("On");
+                                terrain_switcher(format!("terrain-{player:?}-a"), ui, a);
+                                ui.label("or");
+                                terrain_switcher(format!("terrain-{player:?}-b"), ui, b);
+                            });
+                        }
+                        Clue::EitherAnimal => {
+                            ui.label("Within one space of either animal");
+                        }
+                        Clue::Animal(animal) => {
+                            ui.horizontal(|ui| {
+                                ui.label("Within two spaces of");
+                                egui::ComboBox::new(format!("animal-{player:?}"), "Territory")
+                                    .selected_text(format!("{animal}"))
                                     .show_ui(ui, |ui| {
-                                        for c in StructureColor::iter() {
-                                            ui.selectable_value(color, c, format!("{c}"));
+                                        for a in Animal::iter() {
+                                            ui.selectable_value(animal, a, format!("{a}"));
                                         }
                                     });
-                                });
-                            }
-                        }
-                    } else {
-                        // Show deduced clues.
-                        let clues = self.deduced_clues.entry(player).or_default();
-                        egui::CollapsingHeader::new(format!("{} possible clues", clues.len()))
-                            .id_source(player)
-                            .show(ui, |ui| {
-                                for clue in clues {
-                                    ui.label(format!("{clue}"));
-                                }
                             });
+                        }
+                        Clue::StructureKind(kind) => {
+                            ui.horizontal(|ui| {
+                                ui.label("Within two spaces of");
+                                egui::ComboBox::new(format!("structurekind-{player:?}"), "")
+                                    .selected_text(format!("{kind}"))
+                                    .show_ui(ui, |ui| {
+                                        for k in StructureKind::iter() {
+                                            ui.selectable_value(kind, k, format!("{k}"));
+                                        }
+                                    });
+                            });
+                        }
+                        Clue::StructureColor(color) => {
+                            ui.horizontal(|ui| {
+                                ui.label("Within three spaces of");
+                                egui::ComboBox::new(
+                                    format!("structurecolor-{player:?}"),
+                                    "structure",
+                                )
+                                .selected_text(format!("{color}"))
+                                .show_ui(ui, |ui| {
+                                    for c in StructureColor::iter() {
+                                        ui.selectable_value(color, c, format!("{c}"));
+                                    }
+                                });
+                            });
+                        }
                     }
+                } else {
+                    // Show deduced clues.
+                    let clues = self.deduced_clues.entry(player).or_default();
+                    egui::CollapsingHeader::new(format!("{} possible clues", clues.len()))
+                        .id_source(player)
+                        .show(ui, |ui| {
+                            for clue in clues {
+                                ui.label(format!("{clue}"));
+                            }
+                        });
                 }
             }
-        });
+        }
     }
 
     fn prefill_answers(&mut self) {

@@ -1,8 +1,11 @@
 use hexx::Hex;
-use notan::egui;
+use notan::egui::{self, Align, Layout};
 use strum::IntoEnumIterator;
 
-use crate::model::{PlayerList, Structure, StructureColor, StructureKind, Tile};
+use crate::{
+    model::{PlayerList, Structure, StructureColor, StructureKind, Tile},
+    LAYOUT_SPACE,
+};
 
 use super::{buildingmap::BuildingMap, Common};
 
@@ -14,10 +17,17 @@ pub struct PlacingStructures {
 
 impl From<&BuildingMap> for PlacingStructures {
     fn from(value: &BuildingMap) -> Self {
-        Self {
+        let mut s = Self {
             map: value.tiles().to_vec(),
             players: value.players.clone(),
-        }
+        };
+
+        // Add default colors
+        s.add(StructureColor::White);
+        s.add(StructureColor::Green);
+        s.add(StructureColor::Blue);
+
+        s
     }
 }
 
@@ -29,21 +39,29 @@ impl Common for PlacingStructures {
         &mut self.map
     }
 
-    fn gui(&mut self, ctx: &egui::Context) -> bool {
+    fn gui(&mut self, ui: &mut egui::Ui) -> bool {
         let mut next_state = false;
 
-        egui::Window::new("Structures").show(ctx, |ui| {
-            for color in StructureColor::iter() {
-                if self.has(color) {
-                    if ui.button(format!("Delete {color} structures")).clicked() {
-                        self.delete(color);
-                    }
-                } else if ui.button(format!("Add {color} structures")).clicked() {
+        ui.heading("Structures");
+        for color in StructureColor::iter() {
+            let mut has = self.has(color);
+            if ui
+                .checkbox(&mut has, format!("{color} structures"))
+                .changed()
+            {
+                if has {
                     self.add(color);
+                } else {
+                    self.delete(color);
                 }
             }
-            ui.separator();
-            ui.label("Drag structures into position on the map.");
+        }
+
+        ui.add_space(LAYOUT_SPACE);
+        ui.label("Drag structures into position on the map.");
+        ui.add_space(LAYOUT_SPACE);
+
+        ui.with_layout(Layout::top_down_justified(Align::Center), |ui| {
             if ui.button("Ready").clicked() {
                 next_state = true;
             }

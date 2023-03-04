@@ -18,7 +18,7 @@ pub trait Common {
     fn tiles(&self) -> &[Tile];
     fn tiles_mut(&mut self) -> &mut [Tile];
     /// Show an egui. Return true to switch to the next state.
-    fn gui(&mut self, ctx: &egui::Context) -> bool;
+    fn gui(&mut self, ui: &mut egui::Ui) -> bool;
     /// Draw a highlight around a tile, if needed.
     fn highlights(&self) -> Vec<Hex>;
     /// Click on a tile.

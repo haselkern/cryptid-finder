@@ -7,12 +7,14 @@ use std::{collections::HashMap, f32::consts::PI};
 use hexx::{Hex, HexLayout, HexOrientation};
 use notan::{
     draw::{CreateDraw, DrawConfig, DrawImages, DrawShapes, DrawTransform},
-    egui::{EguiConfig, EguiPluginSugar},
+    egui::{self, EguiConfig, EguiPluginSugar, Frame, ScrollArea, Style},
     math::{Mat3, Vec2},
     prelude::*,
 };
 use strum::IntoEnumIterator;
 use substate::{Common, SubState};
+
+pub const LAYOUT_SPACE: f32 = 16.0;
 
 #[derive(AppState)]
 struct State {
@@ -90,12 +92,7 @@ fn main() -> Result<(), String> {
         .event(event)
         .add_config(DrawConfig)
         .add_config(EguiConfig)
-        .add_config(
-            WindowConfig::new()
-                .resizable(true)
-                .maximized(true)
-                .title("Cryptid Finder"),
-        )
+        .add_config(WindowConfig::new().resizable(true).title("Cryptid Finder"))
         .build()
 }
 
@@ -242,13 +239,21 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
     let mut switch_state = false;
 
     let output = plugins.egui(|ctx| {
-        switch_state = state.sub.gui(ctx);
+        let frame = Frame::side_top_panel(&Style::default()).inner_margin(LAYOUT_SPACE);
+        egui::SidePanel::left("sidepanel")
+            .resizable(true)
+            .frame(frame)
+            .show(ctx, |ui| {
+                ScrollArea::vertical().show(ui, |ui| {
+                    switch_state = state.sub.gui(ui);
+                });
+            });
 
         if switch_state {
             ctx.memory().reset_areas();
         }
 
-        state.is_egui_hovered = ctx.wants_pointer_input();
+        state.is_egui_hovered = ctx.is_pointer_over_area() || ctx.is_using_pointer();
     });
 
     gfx.render(&output);
@@ -269,21 +274,21 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
 }
 
 fn update(app: &mut App, state: &mut State, layout: &HexLayout) {
-    // Don't update if the mouse is over some egui thing
-    if state.is_egui_hovered {
-        return;
-    }
-
     let mouse = Vec2::from(app.mouse.position());
     let mouse_hex = layout.world_pos_to_hex(mouse);
 
-    if app.mouse.left_was_released() {
+    if app.mouse.left_was_released() && !state.is_egui_hovered {
         state.sub.click(mouse_hex);
     }
 
     if app.mouse.left_is_down() {
         match state.dragging {
             Dragging::None => {
+                // Don't start dragging anything when the mouse is over egui
+                if state.is_egui_hovered {
+                    return;
+                }
+
                 // Start dragging a structure (if that is allowed) or the screen.
                 let over_tile = state.sub.tiles().iter().find(|t| t.position == mouse_hex);
                 let has_structure = over_tile.map(|t| t.structure.is_some()).unwrap_or(false);
