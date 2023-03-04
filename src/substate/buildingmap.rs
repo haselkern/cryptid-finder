@@ -153,8 +153,8 @@ impl Common for BuildingMap {
         self.map_ready && self.players_ready
     }
 
-    fn highlight(&self) -> Option<Hex> {
-        None
+    fn highlights(&self) -> Vec<Hex> {
+        Vec::new()
     }
 
     fn click(&mut self, _hex: Hex) {}

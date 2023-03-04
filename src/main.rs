@@ -90,7 +90,12 @@ fn main() -> Result<(), String> {
         .event(event)
         .add_config(DrawConfig)
         .add_config(EguiConfig)
-        .add_config(WindowConfig::new().resizable(true).title("Cryptid Finder"))
+        .add_config(
+            WindowConfig::new()
+                .resizable(true)
+                .maximized(true)
+                .title("Cryptid Finder"),
+        )
         .build()
 }
 
@@ -218,16 +223,17 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
             }
         }
 
-        // This tile might be highlighted
-        if let Some(highlight) = state.sub.highlight() {
-            if highlight == tile.position {
-                draw.polygon(6, state.tile_radius * 0.8)
-                    .stroke(stroke_width)
-                    .stroke_color(Color::YELLOW)
-                    .rotate(app.timer.time_since_init());
-            }
-        }
+        draw.transform().pop();
+    }
 
+    // This tile might be highlighted
+    for highlight in state.sub.highlights() {
+        let position = layout.hex_to_world_pos(highlight);
+        draw.transform().push(Mat3::from_translation(position));
+        draw.polygon(6, state.tile_radius * 0.8)
+            .stroke(stroke_width)
+            .stroke_color(Color::YELLOW)
+            .rotate(app.timer.time_since_init());
         draw.transform().pop();
     }
 

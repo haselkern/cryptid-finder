@@ -52,8 +52,8 @@ impl Common for PlacingStructures {
         next_state
     }
 
-    fn highlight(&self) -> Option<Hex> {
-        None
+    fn highlights(&self) -> Vec<Hex> {
+        Vec::new()
     }
 
     fn click(&mut self, _hex: Hex) {}

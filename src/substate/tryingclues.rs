@@ -1,11 +1,13 @@
 use std::{collections::HashMap, hash::Hash};
 
 use hexx::Hex;
+use itertools::Itertools;
 use notan::egui::{self, Context};
 use strum::IntoEnumIterator;
 
 use crate::model::{
-    Animal, Answer, Clue, Map, PlayerID, PlayerList, StructureColor, StructureKind, Terrain, Tile,
+    Animal, Answer, Clue, Hint, Map, PlayerID, PlayerList, StructureColor, StructureKind, Terrain,
+    Tile,
 };
 
 use super::{placingstructures::PlacingStructures, Common};
@@ -19,22 +21,39 @@ pub struct TryingClues {
     known_clues: HashMap<PlayerID, bool>,
     /// Cache for clues deduced from answers.
     deduced_clues: HashMap<PlayerID, Vec<Clue>>,
-    highlight: Option<Hex>,
+    highlights: Vec<Hex>,
     players: PlayerList,
+    hints: Vec<Hint>,
+    /// The player that is using this software. Used for cheating from the correct perspective.
+    user: PlayerID,
 }
 
 impl From<&PlacingStructures> for TryingClues {
     fn from(value: &PlacingStructures) -> Self {
+        let players = value.players.clone();
+        let user = players
+            .iter()
+            .next()
+            .map(|p| p.id)
+            .expect("empty PlayerList is not possible");
+
         let mut s = Self {
             map: Map(value.tiles().to_vec()),
-            highlight: Some(Hex::ZERO),
-            players: value.players.clone(),
+            highlights: Vec::new(),
+            players,
             clues: Default::default(),
             known_clues: Default::default(),
             deduced_clues: Default::default(),
+            hints: Default::default(),
+            user,
         };
+
         s.deduce_clues();
         s.update_map_from_clues();
+        // We are using the entry API and setting default answers every time a tile is clicked.
+        // Since that triggers recomputations of things, we just set all answers to unknown here for every tile.
+        // That way no changes to the map are made when tiles are clicked.
+        s.prefill_answers();
         s
     }
 }
@@ -51,15 +70,20 @@ impl Common for TryingClues {
         let clues_before = self.clues.clone();
         let known_clues_before = self.known_clues.clone();
         let tiles_before = self.tiles().to_vec();
+        let user_before = self.user;
 
-        self.gui_for_clues(ctx);
+        // TODO All these windows are starting to get annoying. Try to replace them with sidebar panels.
         self.gui_for_questions(ctx);
+        self.gui_for_cheats(ctx);
+        self.gui_for_clues(ctx);
 
         let clues_changed = clues_before != self.clues;
         let known_clues_changed = known_clues_before != self.known_clues;
         let tiles_changed = !itertools::equal(&tiles_before, self.tiles());
+        let user_changed = user_before != self.user;
 
         if tiles_changed {
+            // The tiles i.e. the answers have changed so we need to think about the possible clues again.
             self.deduce_clues();
         }
 
@@ -67,15 +91,27 @@ impl Common for TryingClues {
             self.update_map_from_clues();
         }
 
+        if clues_changed || known_clues_changed || tiles_changed || user_changed {
+            // Something changed that influences the hints. Recomputing those is expensive,
+            // so just clear them. The user can refresh them by pressing a button.
+            self.hints.clear();
+        }
+
         false
     }
 
-    fn highlight(&self) -> Option<Hex> {
-        self.highlight
+    fn highlights(&self) -> Vec<Hex> {
+        self.highlights.to_vec()
     }
 
     fn click(&mut self, hex: Hex) {
-        self.highlight = self.map.get(hex).is_some().then_some(hex);
+        self.highlights = self
+            .map
+            .get(hex)
+            .is_some()
+            .then_some(hex)
+            .into_iter()
+            .collect();
     }
 
     fn players(&self) -> &PlayerList {
@@ -84,9 +120,48 @@ impl Common for TryingClues {
 }
 
 impl TryingClues {
+    fn gui_for_cheats(&mut self, ctx: &Context) {
+        egui::Window::new("Cheat").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("You are");
+                egui::ComboBox::new("cheat-player-select", "")
+                    .selected_text(&self.players.get(self.user).name)
+                    .show_ui(ui, |ui| {
+                        for player in self.players.iter() {
+                            ui.selectable_value(&mut self.user, player.id, &player.name);
+                        }
+                    });
+            });
+            ui.separator();
+
+            if self.hints.is_empty() {
+                ui.label("No hints available or map changed.");
+                if ui.button("Refresh").clicked() {
+                    self.calculate_hints();
+                }
+            }
+
+            for hint in &self.hints {
+                ui.horizontal(|ui| {
+                    if ui.button("Show").clicked() {
+                        self.highlights = hint.tiles.to_vec();
+                    }
+                    ui.label(&hint.text);
+                });
+            }
+        });
+    }
+
     fn gui_for_questions(&mut self, ctx: &Context) {
+        // Answers can only be placed when there is a single selection.
+        let selection = if self.highlights.len() == 1 {
+            self.highlights.first().copied()
+        } else {
+            None
+        };
+
         egui::Window::new("Answers").show(ctx, |ui| {
-            if let Some(selected_tile) = self.highlight.and_then(|hex| self.map.get_mut(hex)) {
+            if let Some(selected_tile) = selection.and_then(|hex| self.map.get_mut(hex)) {
                 ui.label("Set answers for the selected tile.");
                 ui.separator();
                 for player in self.players.iter() {
@@ -230,11 +305,123 @@ impl TryingClues {
         });
     }
 
+    fn prefill_answers(&mut self) {
+        for tile in self.map.0.iter_mut() {
+            for player in self.players.iter() {
+                tile.answers.insert(player.id, Answer::Unknown);
+            }
+        }
+    }
+
     /// Build a list of possible clues for each player according to their given answers.
     fn deduce_clues(&mut self) {
         for player in self.players.iter() {
             let clues = self.map.clues_for_player(player.id);
             self.deduced_clues.insert(player.id, clues);
+        }
+    }
+
+    /// Calculate hints. This is compute intensive, so don't call it every frame.
+    fn calculate_hints(&mut self) {
+        self.hints.clear();
+
+        /// Helper struct to keep track of how many clues/tiles are affected by asking
+        /// a question on a tile.
+        struct Question {
+            tile: Hex,
+            gain_with_no: usize,
+            gain_with_yes: usize,
+        }
+
+        let opponents = self.players.iter().filter(|p| p.id != self.user);
+        for player in opponents {
+            let mut questions: Vec<Question> = Vec::new();
+
+            // Simulate placing answers to find spaces with best chance of reducing clues.
+            let clues_before = self.map.clues_for_player(player.id);
+            if clues_before.len() == 1 {
+                // Player has only a single clue left. No point in asking any questions.
+                continue;
+            }
+
+            // Scan all tiles for quality of asking a question there.
+            for i in 0..self.map.0.len() {
+                let answer_before = *self.map.0[i].answers.entry(player.id).or_default();
+                if answer_before != Answer::Unknown {
+                    // Player already answered on this tile.
+                    continue;
+                }
+
+                self.map.0[i].answers.insert(player.id, Answer::Yes);
+                let clues_with_yes = self.map.clues_for_player(player.id);
+                self.map.0[i].answers.insert(player.id, Answer::No);
+                let clues_with_no = self.map.clues_for_player(player.id);
+                self.map.0[i].answers.insert(player.id, Answer::Unknown);
+
+                let gain_with_yes = clues_before.len().abs_diff(clues_with_yes.len());
+                let gain_with_no = clues_before.len().abs_diff(clues_with_no.len());
+
+                questions.push(Question {
+                    tile: self.map.0[i].position,
+                    gain_with_yes,
+                    gain_with_no,
+                });
+            }
+
+            // Perform binary search on available clues. Prefer questions that halve the available clues,
+            // regardless of whether they answer yes or no.
+            let best = questions
+                .into_iter()
+                .min_set_by_key(|q| q.gain_with_yes.abs_diff(q.gain_with_no));
+            if let Some(q) = best.first() {
+                let at_least = q.gain_with_no.min(q.gain_with_yes);
+                let at_most = q.gain_with_no.max(q.gain_with_yes);
+                let text = if at_least == at_most {
+                    format!("Ask {} here to rule out {at_least} clues.", player.name)
+                } else {
+                    format!(
+                        "Ask {} here to rule out {at_least} to {at_most} clues.",
+                        player.name
+                    )
+                };
+                let tiles = best.into_iter().map(|q| q.tile).collect();
+                self.hints.push(Hint { text, tiles });
+            }
+        }
+
+        // Find tiles that give the least information (change in possible clues
+        // when the user is forced to place a "no".
+        struct No {
+            clue_diff: usize,
+            tile: Hex,
+        }
+        let mut nos = Vec::new();
+        let clues_before = self.map.clues_for_player(self.user);
+        for i in 0..self.map.0.len() {
+            let answer_before = *self.map.0[i].answers.entry(self.user).or_default();
+            if answer_before != Answer::Unknown {
+                // Player already answered on this tile.
+                continue;
+            }
+
+            self.map.0[i].answers.insert(self.user, Answer::No);
+            let clues_with_no = self.map.clues_for_player(self.user);
+            self.map.0[i].answers.insert(self.user, Answer::Unknown);
+
+            nos.push(No {
+                clue_diff: clues_before.len().abs_diff(clues_with_no.len()),
+                tile: self.map.0[i].position,
+            });
+        }
+        let best = nos.into_iter().min_set_by_key(|n| n.clue_diff);
+        if let Some(diff) = best.first().map(|n| n.clue_diff) {
+            let text = if diff == 0 {
+                "Place a 'no' here to reveal no new information.".to_owned()
+            } else {
+                format!("Place a 'no' here to rule out {diff} of your clues.")
+            };
+            let tiles = best.into_iter().map(|n| n.tile).collect();
+            self.hints.push(Hint { text, tiles });
         }
     }
 

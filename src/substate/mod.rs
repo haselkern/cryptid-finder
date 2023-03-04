@@ -20,7 +20,7 @@ pub trait Common {
     /// Show an egui. Return true to switch to the next state.
     fn gui(&mut self, ctx: &egui::Context) -> bool;
     /// Draw a highlight around a tile, if needed.
-    fn highlight(&self) -> Option<Hex>;
+    fn highlights(&self) -> Vec<Hex>;
     /// Click on a tile.
     fn click(&mut self, hex: Hex);
     fn players(&self) -> &PlayerList;

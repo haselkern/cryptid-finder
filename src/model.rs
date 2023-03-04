@@ -459,3 +459,10 @@ impl PlayerList {
         })
     }
 }
+
+/// Describe some fields with a text for the user.
+#[derive(Debug, Clone)]
+pub struct Hint {
+    pub text: String,
+    pub tiles: Vec<Hex>,
+}
