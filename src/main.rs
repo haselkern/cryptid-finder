@@ -15,6 +15,7 @@ use strum::IntoEnumIterator;
 use substate::{Common, SubState};
 
 pub const LAYOUT_SPACE: f32 = 16.0;
+pub const START_MAXIMIZED: bool = cfg!(target_family = "wasm");
 
 #[derive(AppState)]
 struct State {
@@ -92,7 +93,12 @@ fn main() -> Result<(), String> {
         .event(event)
         .add_config(DrawConfig)
         .add_config(EguiConfig)
-        .add_config(WindowConfig::new().resizable(true).title("Cryptid Finder"))
+        .add_config(
+            WindowConfig::new()
+                .resizable(true)
+                .maximized(START_MAXIMIZED)
+                .title("Cryptid Finder"),
+        )
         .build()
 }
 
