@@ -75,7 +75,6 @@ impl Common for TryingClues {
         let tiles_before = self.tiles().to_vec();
         let user_before = self.user;
 
-        // TODO All these windows are starting to get annoying. Try to replace them with sidebar panels.
         self.gui_for_answers(ui);
         ui.add_space(LAYOUT_SPACE);
         self.gui_for_cheats(ui);
