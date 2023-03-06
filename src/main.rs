@@ -105,7 +105,7 @@ fn main() -> Result<(), String> {
 fn event(state: &mut State, event: Event) {
     if !state.is_egui_hovered {
         if let Event::MouseWheel { delta_y, .. } = event {
-            state.tile_radius = (state.tile_radius + delta_y).clamp(8.0, 1024.0);
+            state.tile_radius = (state.tile_radius + delta_y * 0.1).clamp(8.0, 1024.0);
         }
     }
 }
