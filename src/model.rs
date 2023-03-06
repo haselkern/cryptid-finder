@@ -20,11 +20,11 @@ pub enum Terrain {
 impl From<Terrain> for Color {
     fn from(value: Terrain) -> Self {
         match value {
-            Terrain::Desert => Color::new(0.82, 0.7, 0.31, 1.0),
-            Terrain::Forest => Color::new(0.2, 0.35, 0.24, 1.0),
-            Terrain::Water => Color::new(0.31, 0.5, 0.78, 1.0),
-            Terrain::Swamp => Color::new(0.23, 0.18, 0.29, 1.0),
-            Terrain::Mountain => Color::new(0.62, 0.62, 0.62, 1.0),
+            Terrain::Desert => Color::from_bytes(241, 198, 76, 255),
+            Terrain::Forest => Color::from_bytes(43, 101, 57, 255),
+            Terrain::Water => Color::from_bytes(56, 129, 211, 255),
+            Terrain::Swamp => Color::from_bytes(70, 54, 71, 255),
+            Terrain::Mountain => Color::from_bytes(152, 147, 153, 255),
         }
     }
 }

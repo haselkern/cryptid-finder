@@ -149,7 +149,7 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
             if let Some(animal) = tile.animal {
                 let color = match animal {
                     Animal::Bear => Color::BLACK,
-                    Animal::Cougar => Color::new(0.78, 0.1, 0.1, 1.0),
+                    Animal::Cougar => Color::from_bytes(220, 25, 11, 255),
                 };
 
                 draw.polygon(6, state.tile_radius * 0.9)
