@@ -1,6 +1,10 @@
 # Cryptid Finder
 
-TODO Nice description here.
+<https://haselkern.com/cryptid-finder/>
+
+Helper/cheat tool for the board game [Cryptid](https://boardgamegeek.com/boardgame/246784/cryptid). This can only really be used when you know how to play the game. Cryptid is fun, so check it out and then come back here when you're ready to cheat your friends!
+
+> **Note** Inverted clues are not yet supported.
 
 ## Development
 

@@ -50,6 +50,11 @@ impl Common for BuildingMap {
         let mut map_ready = false;
         let mut players_ready = false;
 
+        ui.label(
+            "Helper/cheat tool for the board game Cryptid. Check GitHub for more information.",
+        );
+        ui.add_space(LAYOUT_SPACE);
+
         ui.heading("Map");
         ui.columns(1, |ui| {
             let ui = &mut ui[0];

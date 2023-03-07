@@ -7,7 +7,7 @@ use std::{collections::HashMap, f32::consts::PI};
 use hexx::{Hex, HexLayout, HexOrientation};
 use notan::{
     draw::{CreateDraw, DrawConfig, DrawImages, DrawShapes, DrawTransform},
-    egui::{self, EguiConfig, EguiPluginSugar, Frame, ScrollArea, Style},
+    egui::{self, EguiConfig, EguiPluginSugar, Frame, RichText, ScrollArea, Style},
     math::{Mat3, Vec2},
     prelude::*,
 };
@@ -251,6 +251,10 @@ fn draw(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut St
             .frame(frame)
             .show(ctx, |ui| {
                 ScrollArea::vertical().show(ui, |ui| {
+                    ui.heading("Cryptid Finder");
+                    ui.label(RichText::new("by haselkern").weak());
+                    ui.add_space(LAYOUT_SPACE);
+
                     switch_state = state.sub.gui(ui);
                 });
             });
