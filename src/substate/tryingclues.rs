@@ -203,7 +203,7 @@ impl TryingClues {
                 let known = self.known_clues.entry(player).or_default();
                 ui.horizontal(|ui| {
                     ui.label(self.players.get(player).name.to_string());
-                    ui.toggle_value(known, "Known");
+                    ui.checkbox(known, "Known Clue");
                 });
                 if *known {
                     // Change clue type
