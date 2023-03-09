@@ -6,6 +6,8 @@ Helper/cheat tool for the board game [Cryptid](https://boardgamegeek.com/boardga
 
 > **Note** Inverted clues are not yet supported.
 
+![A preview of a game in progress.](assets/screenshot.png)
+
 ## Development
 
 Required:
