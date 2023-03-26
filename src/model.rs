@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, HashSet},
-    fmt,
+    fmt, iter,
 };
 
 use hexx::{Hex, HexMap, OffsetHexMode};
@@ -199,9 +199,59 @@ impl ParsedPiece {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Clue {
+    pub kind: ClueKind,
+    pub inverted: bool,
+}
+
+impl Clue {
+    /// Returns every possible clue for the available structure colors/kinds.
+    pub fn all<'a>(
+        structure_colors: &'a [StructureColor],
+        structure_kinds: &'a [StructureKind],
+        with_inverted: bool,
+    ) -> impl Iterator<Item = Self> + 'a {
+        let clues = ClueKind::all(structure_colors, structure_kinds).map(|kind| Clue {
+            kind,
+            inverted: false,
+        });
+        let inverted: Box<dyn Iterator<Item = Clue>> = if with_inverted {
+            Box::new(
+                ClueKind::all(structure_colors, structure_kinds).map(|kind| Clue {
+                    kind,
+                    inverted: true,
+                }),
+            )
+        } else {
+            Box::new(iter::empty())
+        };
+        clues.chain(inverted)
+    }
+}
+
+impl From<ClueKind> for Clue {
+    fn from(kind: ClueKind) -> Self {
+        Self {
+            kind,
+            inverted: false,
+        }
+    }
+}
+
+impl fmt::Display for Clue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.inverted {
+            write!(f, "not {}", self.kind)
+        } else {
+            write!(f, "{}", self.kind)
+        }
+    }
+}
+
 /// All possible clues.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Clue {
+pub enum ClueKind {
     /// The creature is with one space of the terrain.
     Terrain(Terrain),
     /// The creature is on one of these types of terrain.
@@ -216,20 +266,23 @@ pub enum Clue {
     StructureColor(StructureColor),
 }
 
-impl Clue {
+impl ClueKind {
     /// Returns every possible clue for the available structure colors/kinds.
-    pub fn all(
-        structure_colors: impl IntoIterator<Item = StructureColor>,
-        structure_kinds: impl IntoIterator<Item = StructureKind>,
-    ) -> impl Iterator<Item = Self> {
-        let terrain = Terrain::iter().map(Clue::Terrain);
+    pub fn all<'a>(
+        structure_colors: &'a [StructureColor],
+        structure_kinds: &'a [StructureKind],
+    ) -> impl Iterator<Item = Self> + 'a {
+        let terrain = Terrain::iter().map(ClueKind::Terrain);
         let two_terrains = Terrain::iter()
             .combinations(2)
-            .map(|ts| Clue::TwoTerrains(ts[0], ts[1]));
-        let either_animal = [Clue::EitherAnimal];
-        let animal = Animal::iter().map(Clue::Animal);
-        let structure_kind = structure_kinds.into_iter().map(Clue::StructureKind);
-        let structure_color = structure_colors.into_iter().map(Clue::StructureColor);
+            .map(|ts| ClueKind::TwoTerrains(ts[0], ts[1]));
+        let either_animal = [ClueKind::EitherAnimal];
+        let animal = Animal::iter().map(ClueKind::Animal);
+        let structure_kind = structure_kinds.iter().copied().map(ClueKind::StructureKind);
+        let structure_color = structure_colors
+            .iter()
+            .copied()
+            .map(ClueKind::StructureColor);
 
         terrain
             .chain(two_terrains)
@@ -240,15 +293,15 @@ impl Clue {
     }
 }
 
-impl fmt::Display for Clue {
+impl fmt::Display for ClueKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Clue::Terrain(t) => write!(f, "Within one space of {t}"),
-            Clue::TwoTerrains(a, b) => write!(f, "On {a} or {b}"),
-            Clue::EitherAnimal => write!(f, "Within one space of bear or cougar"),
-            Clue::Animal(a) => write!(f, "Within two spaces of {a}"),
-            Clue::StructureKind(k) => write!(f, "Within two spaces of {k}"),
-            Clue::StructureColor(c) => write!(f, "Within three spaces of {c} structure"),
+            ClueKind::Terrain(t) => write!(f, "within one space of {t}"),
+            ClueKind::TwoTerrains(a, b) => write!(f, "on {a} or {b}"),
+            ClueKind::EitherAnimal => write!(f, "within one space of bear or cougar"),
+            ClueKind::Animal(a) => write!(f, "within two spaces of {a}"),
+            ClueKind::StructureKind(k) => write!(f, "within two spaces of {k}"),
+            ClueKind::StructureColor(c) => write!(f, "within three spaces of {c} structure"),
         }
     }
 }
@@ -268,46 +321,58 @@ impl Map {
 
     /// Returns true if the cryptid could be at the given position according to the clue.
     pub fn clue_applies(&self, clue: Clue, position: Hex) -> bool {
-        match clue {
-            Clue::Terrain(terrain) => self.any(position, 1, |t| t.terrain == terrain),
-            Clue::TwoTerrains(a, b) => match self.get(position) {
+        let applies = match clue.kind {
+            ClueKind::Terrain(terrain) => self.any(position, 1, |t| t.terrain == terrain),
+            ClueKind::TwoTerrains(a, b) => match self.get(position) {
                 Some(tile) => tile.terrain == a || tile.terrain == b,
                 None => false,
             },
-            Clue::EitherAnimal => self.any(position, 1, |t| t.animal.is_some()),
-            Clue::Animal(animal) => self.any(position, 2, |t| t.animal == Some(animal)),
-            Clue::StructureKind(kind) => self.any(position, 2, |t| {
+            ClueKind::EitherAnimal => self.any(position, 1, |t| t.animal.is_some()),
+            ClueKind::Animal(animal) => self.any(position, 2, |t| t.animal == Some(animal)),
+            ClueKind::StructureKind(kind) => self.any(position, 2, |t| {
                 t.structure.map(|s| s.kind == kind).unwrap_or(false)
             }),
-            Clue::StructureColor(color) => self.any(position, 3, |t| {
+            ClueKind::StructureColor(color) => self.any(position, 3, |t| {
                 t.structure.map(|s| s.color == color).unwrap_or(false)
             }),
+        };
+
+        if clue.inverted {
+            !applies
+        } else {
+            applies
         }
     }
 
     /// Returns [StructureColor]s present on the map.
-    pub fn structure_colors(&self) -> impl Iterator<Item = StructureColor> + '_ {
+    pub fn structure_colors(&self) -> Vec<StructureColor> {
         self.0
             .iter()
             .filter_map(|t| t.structure)
             .map(|s| s.color)
             .unique()
+            .collect()
     }
 
     /// Returns [StructureKind]s present on the map.
-    pub fn structure_kinds(&self) -> impl Iterator<Item = StructureKind> + '_ {
+    pub fn structure_kinds(&self) -> Vec<StructureKind> {
         self.0
             .iter()
             .filter_map(|t| t.structure)
             .map(|s| s.kind)
             .unique()
+            .collect()
     }
 
     /// Return a list of possible clues for the player, respecting the answers they already gave.
-    pub fn clues_for_player(&self, player: PlayerID) -> Vec<Clue> {
+    pub fn clues_for_player(&self, player: PlayerID, with_inverted: bool) -> Vec<Clue> {
         let mut result = Vec::new();
 
-        for clue in Clue::all(self.structure_colors(), self.structure_kinds()) {
+        for clue in Clue::all(
+            &self.structure_colors(),
+            &self.structure_kinds(),
+            with_inverted,
+        ) {
             let tiles_with_answer = self
                 .0
                 .iter()

@@ -7,8 +7,8 @@ use strum::IntoEnumIterator;
 
 use crate::{
     model::{
-        Animal, Answer, Clue, Hint, Map, PlayerID, PlayerList, StructureColor, StructureKind,
-        Terrain, Tile,
+        Animal, Answer, Clue, ClueKind, Hint, Map, PlayerID, PlayerList, StructureColor,
+        StructureKind, Terrain, Tile,
     },
     LAYOUT_SPACE,
 };
@@ -24,6 +24,8 @@ pub struct TryingClues {
     known_clues: HashMap<PlayerID, bool>,
     /// Cache for clues deduced from answers.
     deduced_clues: HashMap<PlayerID, Vec<Clue>>,
+    /// True if the game is played with inverted clues.
+    with_inverted: bool,
     highlights: Vec<Hex>,
     players: PlayerList,
     hints: Vec<Hint>,
@@ -49,6 +51,7 @@ impl From<&PlacingStructures> for TryingClues {
             deduced_clues: Default::default(),
             hints: Default::default(),
             user,
+            with_inverted: false,
         };
 
         s.deduce_clues();
@@ -74,6 +77,9 @@ impl Common for TryingClues {
         let known_clues_before = self.known_clues.clone();
         let tiles_before = self.tiles().to_vec();
         let user_before = self.user;
+        let with_inverted_before = self.with_inverted;
+
+        ui.checkbox(&mut self.with_inverted, "Enable inverted clues");
 
         self.gui_for_answers(ui);
         ui.add_space(LAYOUT_SPACE);
@@ -85,17 +91,23 @@ impl Common for TryingClues {
         let known_clues_changed = known_clues_before != self.known_clues;
         let tiles_changed = !itertools::equal(&tiles_before, self.tiles());
         let user_changed = user_before != self.user;
+        let with_inverted_changed = with_inverted_before != self.with_inverted;
 
-        if tiles_changed {
+        if tiles_changed || with_inverted_changed {
             // The tiles i.e. the answers have changed so we need to think about the possible clues again.
             self.deduce_clues();
         }
 
-        if clues_changed || known_clues_changed || tiles_changed {
+        if clues_changed || known_clues_changed || tiles_changed || with_inverted_changed {
             self.update_map_from_clues();
         }
 
-        if clues_changed || known_clues_changed || tiles_changed || user_changed {
+        if clues_changed
+            || known_clues_changed
+            || tiles_changed
+            || user_changed
+            || with_inverted_changed
+        {
             // Something changed that influences the hints. Recomputing those is expensive,
             // so just clear them. The user can refresh them by pressing a button.
             self.hints.clear();
@@ -199,7 +211,7 @@ impl TryingClues {
                 let clue = self
                     .clues
                     .entry(player)
-                    .or_insert(Clue::Terrain(Terrain::Desert));
+                    .or_insert(ClueKind::Terrain(Terrain::Desert).into());
                 let known = self.known_clues.entry(player).or_default();
                 ui.horizontal(|ui| {
                     ui.label(self.players.get(player).name.to_string());
@@ -211,37 +223,38 @@ impl TryingClues {
                         .selected_text("Edit type")
                         .show_ui(ui, |ui| {
                             if ui.button("Within one space of terrain").clicked() {
-                                *clue = Clue::Terrain(Terrain::Desert);
+                                *clue = ClueKind::Terrain(Terrain::Desert).into();
                             }
                             if ui.button("One of two terrains").clicked() {
-                                *clue = Clue::TwoTerrains(Terrain::Desert, Terrain::Forest);
+                                *clue =
+                                    ClueKind::TwoTerrains(Terrain::Desert, Terrain::Forest).into();
                             }
                             if ui.button("Within one space of either animal").clicked() {
-                                *clue = Clue::EitherAnimal;
+                                *clue = ClueKind::EitherAnimal.into();
                             }
                             if ui.button("Within two spaces of animal").clicked() {
-                                *clue = Clue::Animal(Animal::Bear);
+                                *clue = ClueKind::Animal(Animal::Bear).into();
                             }
                             if ui.button("Within two spaces of structure type").clicked() {
-                                *clue = Clue::StructureKind(StructureKind::Shack);
+                                *clue = ClueKind::StructureKind(StructureKind::Shack).into();
                             }
                             if ui
                                 .button("Within three spaces of structure color")
                                 .clicked()
                             {
-                                *clue = Clue::StructureColor(StructureColor::Black);
+                                *clue = ClueKind::StructureColor(StructureColor::Black).into();
                             }
                         });
 
                     // Edit clue
-                    match clue {
-                        Clue::Terrain(terrain) => {
+                    match &mut clue.kind {
+                        ClueKind::Terrain(terrain) => {
                             ui.horizontal(|ui| {
                                 ui.label("Within one space of");
                                 terrain_switcher(format!("terrain-{player:?}"), ui, terrain);
                             });
                         }
-                        Clue::TwoTerrains(a, b) => {
+                        ClueKind::TwoTerrains(a, b) => {
                             ui.horizontal(|ui| {
                                 ui.label("On");
                                 terrain_switcher(format!("terrain-{player:?}-a"), ui, a);
@@ -249,10 +262,10 @@ impl TryingClues {
                                 terrain_switcher(format!("terrain-{player:?}-b"), ui, b);
                             });
                         }
-                        Clue::EitherAnimal => {
+                        ClueKind::EitherAnimal => {
                             ui.label("Within one space of either animal");
                         }
-                        Clue::Animal(animal) => {
+                        ClueKind::Animal(animal) => {
                             ui.horizontal(|ui| {
                                 ui.label("Within two spaces of");
                                 egui::ComboBox::new(format!("animal-{player:?}"), "Territory")
@@ -264,7 +277,7 @@ impl TryingClues {
                                     });
                             });
                         }
-                        Clue::StructureKind(kind) => {
+                        ClueKind::StructureKind(kind) => {
                             ui.horizontal(|ui| {
                                 ui.label("Within two spaces of");
                                 egui::ComboBox::new(format!("structurekind-{player:?}"), "")
@@ -276,7 +289,7 @@ impl TryingClues {
                                     });
                             });
                         }
-                        Clue::StructureColor(color) => {
+                        ClueKind::StructureColor(color) => {
                             ui.horizontal(|ui| {
                                 ui.label("Within three spaces of");
                                 egui::ComboBox::new(
@@ -318,7 +331,7 @@ impl TryingClues {
     /// Build a list of possible clues for each player according to their given answers.
     fn deduce_clues(&mut self) {
         for player in self.players.iter() {
-            let clues = self.map.clues_for_player(player.id);
+            let clues = self.map.clues_for_player(player.id, self.with_inverted);
             self.deduced_clues.insert(player.id, clues);
         }
     }
@@ -340,7 +353,7 @@ impl TryingClues {
             let mut questions: Vec<Question> = Vec::new();
 
             // Simulate placing answers to find spaces with best chance of reducing clues.
-            let clues_before = self.map.clues_for_player(player.id);
+            let clues_before = self.map.clues_for_player(player.id, self.with_inverted);
             if clues_before.len() == 1 {
                 // Player has only a single clue left. No point in asking any questions.
                 continue;
@@ -355,9 +368,9 @@ impl TryingClues {
                 }
 
                 self.map.0[i].answers.insert(player.id, Answer::Yes);
-                let clues_with_yes = self.map.clues_for_player(player.id);
+                let clues_with_yes = self.map.clues_for_player(player.id, self.with_inverted);
                 self.map.0[i].answers.insert(player.id, Answer::No);
-                let clues_with_no = self.map.clues_for_player(player.id);
+                let clues_with_no = self.map.clues_for_player(player.id, self.with_inverted);
                 self.map.0[i].answers.insert(player.id, Answer::Unknown);
 
                 let gain_with_yes = clues_before.len().abs_diff(clues_with_yes.len());
@@ -393,12 +406,16 @@ impl TryingClues {
 
         // Find tiles that give the least information (change in possible clues
         // when the user is forced to place a "no".
+        // TODO Recursive checks? Say there are two fields A and B that reveal no clues when a
+        // "no" is placed on them. But after that another "no" might need to be placed, and maybe
+        // A would allow me to reveal no new information again, while choosing B forces me to rule out
+        // new clues now.
         struct No {
             clue_diff: usize,
             tile: Hex,
         }
         let mut nos = Vec::new();
-        let clues_before = self.map.clues_for_player(self.user);
+        let clues_before = self.map.clues_for_player(self.user, self.with_inverted);
         for i in 0..self.map.0.len() {
             let answer_before = *self.map.0[i].answers.entry(self.user).or_default();
             if answer_before != Answer::Unknown {
@@ -407,7 +424,7 @@ impl TryingClues {
             }
 
             self.map.0[i].answers.insert(self.user, Answer::No);
-            let clues_with_no = self.map.clues_for_player(self.user);
+            let clues_with_no = self.map.clues_for_player(self.user, self.with_inverted);
             self.map.0[i].answers.insert(self.user, Answer::Unknown);
 
             nos.push(No {
